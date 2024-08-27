@@ -63,12 +63,15 @@ openDatabase(function(error, db) {
         return;
     }
 
+    // Create various types of data
     createData(db, {
         temperature: 22,
         condition: "Sunny",
         isRaining: false,
         windSpeed: 5.0,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        tags: ["weather", "sunny", "summer"], // Array
+        image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA" // Example base64 image data
     }, function(error, id) {
         if (error) {
             console.error("Failed to create data:", error);
@@ -83,6 +86,14 @@ openDatabase(function(error, db) {
                 console.error("Failed to retrieve data:", error);
             } else {
                 console.log("Retrieved data:", data);
+                
+                // Display the image in the console (for debugging)
+                if (data.image) {
+                    const img = new Image();
+                    img.src = data.image;
+                    document.body.appendChild(img); // Add image to the body for visualization
+                    console.log("Image data:", data.image);
+                }
             }
         });
     });
