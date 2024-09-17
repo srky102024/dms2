@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 
@@ -18,14 +17,14 @@
         }
 
         #dataQualityChart {
-            max-width: 90vw; /* Responsive width based on viewport width */
-            max-height: 400px; /* Max height for the chart */
-            width: 100%; /* Full width of its container */
-            height: auto; /* Auto height to maintain aspect ratio */
+            max-width: 90vw;
+            max-height: 400px;
+            width: 100%;
+            height: auto;
         }
 
         #container {
-            text-align: center; /* Center align text and button */
+            text-align: center;
         }
 
         h1 {
@@ -35,12 +34,34 @@
         button {
             margin-bottom: 20px;
         }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        input {
+            margin-right: 10px;
+            padding: 5px;
+        }
+
+        #flowerList {
+            margin-top: 20px;
+        }
     </style>
 </head>
 
 <body>
     <div id="container">
         <h1>Flower Database</h1>
+
+        <!-- Form to add a new flower -->
+        <form id="flowerForm">
+            <input type="text" id="name" placeholder="Flower Name" required>
+            <input type="text" id="color" placeholder="Flower Color" required>
+            <input type="text" id="description" placeholder="Flower Description" required>
+            <button type="submit">Add Flower</button>
+        </form>
+
         <button id="loadFlowers">Load Flowers</button>
         <ul id="flowerList"></ul>
 
@@ -76,16 +97,44 @@
             });
         }
 
+        // Load flowers and create the chart
         document.getElementById('loadFlowers').addEventListener('click', async () => {
             try {
                 const response = await fetch('/api/flowers');
                 const data = await response.json();
-
-                // Create the chart with aggregated null counts
                 createChart([data.nameNullCount, data.colorNullCount, data.descNullCount]);
-
             } catch (error) {
                 console.error('Error fetching flowers:', error);
+            }
+        });
+
+        // Add a new flower
+        document.getElementById('flowerForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent form from submitting normally
+
+            // Get the form data
+            const name = document.getElementById('name').value;
+            const color = document.getElementById('color').value;
+            const description = document.getElementById('description').value;
+
+            // Post the new flower to the server
+            try {
+                const response = await fetch('/api/flowers', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, color, description })
+                });
+
+                if (response.ok) {
+                    alert('Flower added successfully!');
+                    document.getElementById('flowerForm').reset(); // Clear the form
+                } else {
+                    alert('Failed to add flower');
+                }
+            } catch (error) {
+                console.error('Error adding flower:', error);
             }
         });
     </script>
