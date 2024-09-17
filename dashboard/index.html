@@ -1,1 +1,94 @@
 
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flower Database</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #dataQualityChart {
+            max-width: 90vw; /* Responsive width based on viewport width */
+            max-height: 400px; /* Max height for the chart */
+            width: 100%; /* Full width of its container */
+            height: auto; /* Auto height to maintain aspect ratio */
+        }
+
+        #container {
+            text-align: center; /* Center align text and button */
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        button {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <h1>Flower Database</h1>
+        <button id="loadFlowers">Load Flowers</button>
+        <ul id="flowerList"></ul>
+
+        <!-- Canvas for the Chart.js bar chart -->
+        <canvas id="dataQualityChart"></canvas>
+    </div>
+
+    <script>
+        // Function to create the chart
+        function createChart(data) {
+            const ctx = document.getElementById('dataQualityChart').getContext('2d');
+            const chartData = {
+                labels: ['Name', 'Color', 'Description'],
+                datasets: [{
+                    label: 'Empty or Null Values',
+                    data: data,
+                    backgroundColor: ['rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)', 'rgba(75, 192, 192, 0.2)'],
+                    borderColor: ['rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(75, 192, 192, 1)'],
+                    borderWidth: 1
+                }]
+            };
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        document.getElementById('loadFlowers').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/flowers');
+                const data = await response.json();
+
+                // Create the chart with aggregated null counts
+                createChart([data.nameNullCount, data.colorNullCount, data.descNullCount]);
+
+            } catch (error) {
+                console.error('Error fetching flowers:', error);
+            }
+        });
+    </script>
+</body>
+
+</html>
