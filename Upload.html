@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CALMAC Weather Data Storage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #dataDisplay {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload and Store CALMAC Weather Data</h1>
+    
+    <input type="file" id="upload" accept=".xlsx, .xls" />
+    <div id="dataDisplay">
+        <h2>Stored Data:</h2>
+        <div id="dataContainer"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.2/xlsx.full.min.js"></script>
+    <script>
+        let db;
+
+        // Open IndexedDB
+        let request = indexedDB.open('CALMACWeatherDB', 1);
+
+        request.onupgradeneeded = function (event) {
+            db = event.target.result;
+
+            // Create object store
+            if (!db.objectStoreNames.contains('weatherData')) {
+                let objectStore = db.createObjectStore('weatherData', { keyPath: 'id', autoIncrement: true });
+                objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+            }
+        };
+
+        request.onsuccess = function (event) {
+            db = event.target.result;
+        };
+
+        request.onerror = function (event) {
+            console.log('Error opening IndexedDB:', event);
+        };
+
+        // Handle Excel file upload
+        document.getElementById('upload').addEventListener('change', function (e) {
+            let file = e.target.files[0];
+            let reader = new FileReader();
+
+            reader.onload = function (event) {
+                let data = new Uint8Array(event.target.result);
+                let workbook = XLSX.read(data, { type: 'array' });
+
+                // Assuming the weather data is in the first sheet
+                let sheet = workbook.Sheets[workbook.SheetNames[0]];
+                let jsonData = XLSX.utils.sheet_to_json(sheet);
+                console.log(jsonData);
+
+                // storeWeatherData(jsonData);
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Store data in IndexedDB
+        function storeWeatherData(data) {
+            let transaction = db.transaction(['weatherData'], 'readwrite');
+            let objectStore = transaction.objectStore('weatherData');
+
+            data.forEach((row, index) => {
+                let weatherRecord = {
+                    id: index + 1,
+                    timestamp: new Date(row.Timestamp), // Assuming there’s a 'Timestamp' field
+                    temperature: row.Temperature, // Replace with actual column names
+                    humidity: row.Humidity, // Replace with actual column names
+                    // Add other fields as necessary
+                };
+                objectStore.add(weatherRecord);
+            });
+
+            transaction.oncomplete = function () {
+                console.log('Weather data added successfully.');
+                displayData();
+            };
+
+            transaction.onerror = function (event) {
+                console.log('Error storing weather data:', event);
+            };
+        }
+
+        // Display data from IndexedDB
+        function displayData() {
+            let transaction = db.transaction(['weatherData'], 'readonly');
+            let objectStore = transaction.objectStore('weatherData');
+            let dataContainer = document.getElementById('dataContainer');
+            dataContainer.innerHTML = '';
+
+            objectStore.openCursor().onsuccess = function (event) {
+                let cursor = event.target.result;
+                if (cursor) {
+                    let data = cursor.value;
+                    let dataDiv = document.createElement('div');
+                    dataDiv.innerHTML = `
+                        <p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString()}</p>
+                        <p><strong>Temperature:</strong> ${data.temperature}°C</p>
+                        <p><strong>Humidity:</strong> ${data.humidity}%</p>
+                    `;
+                    dataContainer.appendChild(dataDiv);
+                    cursor.continue();
+                }
+            };
+        }
+    </script>
+    
+</body>
+</html>
