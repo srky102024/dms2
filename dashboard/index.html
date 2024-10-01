@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/9850/9850812.png" type="image/png">
+    <title>Database Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .section {
+            background-color: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .section h2 {
+            color: #555;
+        }
+
+        .placeholder {
+            font-style: italic;
+            color: #aaa;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Database Dashboard</h1>
+
+        <!-- Neo4j Section -->
+        <div class="section">
+            <h2>Neo4j Database</h2>
+            <p><strong>Number of Nodes:</strong> <span id="neo4j-nodes">Loading...</span></p>
+            <p><strong>Number of Relationships:</strong> <span id="neo4j-edges">Loading...</span></p>
+        </div>
+
+        <!-- MongoDB Section -->
+        <div class="section">
+            <h2>MongoDB Database</h2>
+            <p><strong>FlowerDatabase Collections:</strong> <span id="flower-db-count">Loading...</span></p>
+            <p><strong>FlowerDatabase Null/Empty Fields:</strong> <span id="flower-db-null-count">Loading...</span></p>
+            <p><strong>FlowerDatabaseLoad Collections:</strong> <span id="flower-load-count">Loading...</span></p>
+            <p><strong>FlowerDatabaseLoad Null/Empty Fields:</strong> <span id="flower-load-null-count">Loading...</span></p>
+            <p><strong>FlowerDatabaseTransform Collections:</strong> <span id="flower-transform-count">Loading...</span></p>
+            <p><strong>FlowerDatabaseTransform Null/Empty Fields:</strong> <span id="flower-transform-null-count">Loading...</span></p>
+        </div>
+
+        <!-- IndexedDB Section -->
+        <div class="section">
+            <h2>IndexedDB Database</h2>
+            <p><strong>Number of Records in Flowers:</strong> <span id="indexeddb-records">Loading...</span></p>
+            <p><strong>Records with Empty or Null Values:</strong> <span id="indexeddb-empty-records">Loading...</span></p>
+        </div>
+    </div>
+
+    <script>
+        // Fetch Neo4j data
+        async function fetchNeo4jStats() {
+            try {
+                const response = await fetch('/neo4j-stats');
+                const data = await response.json();
+
+                document.getElementById('neo4j-nodes').textContent = data.nodes;
+                document.getElementById('neo4j-edges').textContent = data.edges;
+            } catch (error) {
+                console.error('Error fetching Neo4j stats:', error);
+            }
+        }
+
+        // Fetch MongoDB data and show separate counts for null/empty values
+        async function fetchMongoDBStats() {
+            try {
+                const response = await fetch('/mongodb-stats');
+                const data = await response.json();
+
+                document.getElementById('flower-db-count').textContent = data.FlowerDatabase;
+                document.getElementById('flower-db-null-count').textContent = data.FlowerDatabaseNull;
+                
+                document.getElementById('flower-load-count').textContent = data.FlowerDatabaseLoad;
+                document.getElementById('flower-load-null-count').textContent = data.FlowerDatabaseLoadNull;
+
+                document.getElementById('flower-transform-count').textContent = data.FlowerDatabaseTransform;
+                document.getElementById('flower-transform-null-count').textContent = data.FlowerDatabaseTransformNull;
+            } catch (error) {
+                console.error('Error fetching MongoDB stats:', error);
+            }
+        }
+
+        // IndexedDB: Create and interact with flowers object store
+        function initializeIndexedDB() {
+            const request = indexedDB.open("FlowerDB", 1);
+
+            request.onupgradeneeded = function (event) {
+                const db = event.target.result;
+
+                if (!db.objectStoreNames.contains('flowers')) {
+                    const store = db.createObjectStore('flowers', { keyPath: 'name' });
+                    store.createIndex('name', 'name', { unique: true });
+                }
+            };
+
+            request.onsuccess = function (event) {
+                const db = event.target.result;
+
+                // Function to add a flower, ensuring no duplicates due to unique constraint
+                function addFlower(flower) {
+                    const transaction = db.transaction('flowers', 'readwrite');
+                    const store = transaction.objectStore('flowers');
+
+                    const addRequest = store.add(flower);
+
+                    addRequest.onsuccess = function () {
+                        console.log(`Added flower: ${flower.name}`);
+                    };
+
+                    addRequest.onerror = function (e) {
+                        console.log(`Failed to add flower: ${flower.name}. Error: ${e.target.error.message}`);
+                    };
+                }
+
+                // Add some flowers, ensuring no duplicates due to unique index
+                const flowers = [
+                    { name: 'Rose', color: 'Red' },
+                    { name: 'Tulip', color: 'Yellow' },
+                    { name: 'Sunflower', color: 'Yellow' },
+                    { name: 'Daisy', color: '' }, // Empty color value
+                    { name: 'EmptyFlower', color: null } // Null color value
+                ];
+
+                flowers.forEach(flower => addFlower(flower));
+
+                // Count the number of records in the "flowers" object store
+                const countTransaction = db.transaction('flowers', 'readonly');
+                const store = countTransaction.objectStore('flowers');
+                const countRequest = store.count();
+
+                countRequest.onsuccess = function () {
+                    document.getElementById('indexeddb-records').textContent = countRequest.result;
+                };
+
+                countRequest.onerror = function () {
+                    console.error('Error counting IndexedDB records.');
+                    document.getElementById('indexeddb-records').textContent = 'Error';
+                };
+
+                // Count records with empty or null values
+                const emptyCountTransaction = db.transaction('flowers', 'readonly');
+                const emptyStore = emptyCountTransaction.objectStore('flowers');
+                const emptyCountRequest = emptyStore.openCursor();
+                let emptyCount = 0;
+
+                emptyCountRequest.onsuccess = function (event) {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        const flower = cursor.value;
+                        if (!flower.color || flower.color === '') {
+                            emptyCount++; // Count records with null or empty color
+                        }
+                        cursor.continue();
+                    } else {
+                        document.getElementById('indexeddb-empty-records').textContent = emptyCount;
+                    }
+                };
+
+                emptyCountRequest.onerror = function () {
+                    console.error('Error counting empty IndexedDB records.');
+                    document.getElementById('indexeddb-empty-records').textContent = 'Error';
+                };
+            };
+
+            request.onerror = function (event) {
+                console.error('Error opening IndexedDB:', event.target.errorCode);
+            };
+        }
+
+        // Call functions to fetch stats and initialize IndexedDB
+        fetchNeo4jStats();
+        fetchMongoDBStats();
+        initializeIndexedDB();
+    </script>
+
+</body>
+
+</html>
