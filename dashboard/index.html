@@ -50,14 +50,14 @@
 
         <!-- Neo4j Section -->
         <div class="section">
-            <h2>Neo4j Database</h2>
+            <h2>Neo4j Status: <span id="neo4j-status"></span></h2>
             <p><strong>Number of Nodes:</strong> <span id="neo4j-nodes">Loading...</span></p>
             <p><strong>Number of Relationships:</strong> <span id="neo4j-edges">Loading...</span></p>
         </div>
 
         <!-- MongoDB Section -->
         <div class="section">
-            <h2>MongoDB Database</h2>
+            <h2>MongoDB Status: <span id="mongo-status"></span></h2>
             <p><strong>FlowerDatabase Collections:</strong> <span id="flower-db-count">Loading...</span> <span
                     id="flower-db-delta-load">(Loading...)</span></p>
             <p><strong>FlowerDatabase Null/Empty Fields:</strong> <span id="flower-db-null-count">Loading...</span></p>
@@ -66,7 +66,8 @@
             <p><strong>FlowerDatabaseLoad Null/Empty Fields:</strong> <span
                     id="flower-load-null-count">Loading...</span></p>
             <p><strong>FlowerDatabaseTransform Collections:</strong> <span id="flower-transform-count">Loading...</span>
-                <span id="flower-transform-delta-load">(Loading...)</span></p>
+                <span id="flower-transform-delta-load">(Loading...)</span>
+            </p>
             <p><strong>FlowerDatabaseTransform Null/Empty Fields:</strong> <span
                     id="flower-transform-null-count">Loading...</span></p>
         </div>
@@ -95,7 +96,6 @@
         }
 
         // Fetch MongoDB data and show separate counts for null/empty values
-        // Fetch MongoDB data and show separate counts for null/empty values
         async function fetchMongoDBStats() {
             try {
                 const response = await fetch('/mongodb-stats');
@@ -115,10 +115,29 @@
                 document.getElementById('flower-load-delta-load').textContent = `(${data.DeltaLoadFlowerDatabaseLoad})`;
                 document.getElementById('flower-transform-delta-load').textContent = `(${data.DeltaLoadFlowerDatabaseTransform})`;
 
+                // Display database status
+                document.getElementById('mongo-status').textContent = data.mongoDBLive ? "MongoDB is live" : "MongoDB is not live";
             } catch (error) {
                 console.error('Error fetching MongoDB stats:', error);
             }
         }
+
+        // Fetch Neo4j stats and display status
+        async function fetchNeo4jStats() {
+            try {
+                const response = await fetch('/neo4j-stats');
+                const data = await response.json();
+
+                document.getElementById('neo4j-nodes').textContent = data.nodes;
+                document.getElementById('neo4j-edges').textContent = data.edges;
+
+                // Display Neo4j database status
+                document.getElementById('neo4j-status').textContent = data.neo4jLive ? "Neo4j is live" : "Neo4j is not live";
+            } catch (error) {
+                console.error('Error fetching Neo4j stats:', error);
+            }
+        }
+
 
         // IndexedDB: Create and interact with flowers object store
         function initializeIndexedDB() {

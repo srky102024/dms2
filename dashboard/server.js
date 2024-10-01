@@ -34,10 +34,11 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
 
-// Neo4j stats API
+// Neo4j stats API// Neo4j stats API
 app.get('/neo4j-stats', async (req, res) => {
     const session = driver.session();
     try {
+        // Check Neo4j connection by counting nodes
         const nodeCountResult = await session.run('MATCH (n) RETURN COUNT(n) AS nodeCount');
         const relationshipCountResult = await session.run('MATCH ()-[r]->() RETURN COUNT(r) AS relationshipCount');
 
@@ -50,28 +51,19 @@ app.get('/neo4j-stats', async (req, res) => {
             ? relationshipCountResult.records[0].get('relationshipCount').low
             : relationshipCountResult.records[0].get('relationshipCount');
 
-        res.json({ nodes: nodeCount, edges: relationshipCount });
+        res.json({ 
+            nodes: nodeCount, 
+            edges: relationshipCount, 
+            neo4jLive: true 
+        });
     } catch (error) {
         console.error('Error fetching Neo4j stats:', error);
-        res.status(500).send('Internal Server Error');
+        res.status(500).send({ neo4jLive: false });
     } finally {
         await session.close();
     }
 });
 
-// Baseline counts for delta calculation (could be stored in a config or database)
-const baselineCounts = {
-    FlowerDatabase: 0,
-    FlowerDatabaseLoad: 0,
-    FlowerDatabaseTransform: 0
-};
-
-// Randomness function
-const getRandomOffset = (min, max) => {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-};
-
-// MongoDB stats API for three different databases
 // MongoDB stats API for three different databases
 app.get('/mongodb-stats', async (req, res) => {
     try {
@@ -121,7 +113,7 @@ app.get('/mongodb-stats', async (req, res) => {
         const deltaLoadFlowerDatabaseLoad = (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 10);
         const deltaLoadFlowerDatabaseTransform = (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 10);
 
-        // Respond with the count from each collection and null/empty field count
+        // Respond with the count from each collection, null/empty field count, and database status
         res.json({
             FlowerDatabase: flowerCount1,
             FlowerDatabaseNull: countNull1,
@@ -132,10 +124,11 @@ app.get('/mongodb-stats', async (req, res) => {
             DeltaLoadFlowerDatabase: (deltaLoadFlowerDatabase >= 0 ? `+${deltaLoadFlowerDatabase}` : deltaLoadFlowerDatabase),
             DeltaLoadFlowerDatabaseLoad: (deltaLoadFlowerDatabaseLoad >= 0 ? `+${deltaLoadFlowerDatabaseLoad}` : deltaLoadFlowerDatabaseLoad),
             DeltaLoadFlowerDatabaseTransform: (deltaLoadFlowerDatabaseTransform >= 0 ? `+${deltaLoadFlowerDatabaseTransform}` : deltaLoadFlowerDatabaseTransform),
+            mongoDBLive: true
         });
     } catch (error) {
         console.error('Error fetching MongoDB stats:', error);
-        res.status(500).send('Internal Server Error');
+        res.status(500).send({ mongoDBLive: false });
     }
 });
 
