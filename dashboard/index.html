@@ -58,19 +58,25 @@
         <!-- MongoDB Section -->
         <div class="section">
             <h2>MongoDB Database</h2>
-            <p><strong>FlowerDatabase Collections:</strong> <span id="flower-db-count">Loading...</span></p>
+            <p><strong>FlowerDatabase Collections:</strong> <span id="flower-db-count">Loading...</span> <span
+                    id="flower-db-delta-load">(Loading...)</span></p>
             <p><strong>FlowerDatabase Null/Empty Fields:</strong> <span id="flower-db-null-count">Loading...</span></p>
-            <p><strong>FlowerDatabaseLoad Collections:</strong> <span id="flower-load-count">Loading...</span></p>
-            <p><strong>FlowerDatabaseLoad Null/Empty Fields:</strong> <span id="flower-load-null-count">Loading...</span></p>
-            <p><strong>FlowerDatabaseTransform Collections:</strong> <span id="flower-transform-count">Loading...</span></p>
-            <p><strong>FlowerDatabaseTransform Null/Empty Fields:</strong> <span id="flower-transform-null-count">Loading...</span></p>
+            <p><strong>FlowerDatabaseLoad Collections:</strong> <span id="flower-load-count">Loading...</span> <span
+                    id="flower-load-delta-load">(Loading...)</span></p>
+            <p><strong>FlowerDatabaseLoad Null/Empty Fields:</strong> <span
+                    id="flower-load-null-count">Loading...</span></p>
+            <p><strong>FlowerDatabaseTransform Collections:</strong> <span id="flower-transform-count">Loading...</span>
+                <span id="flower-transform-delta-load">(Loading...)</span></p>
+            <p><strong>FlowerDatabaseTransform Null/Empty Fields:</strong> <span
+                    id="flower-transform-null-count">Loading...</span></p>
         </div>
 
         <!-- IndexedDB Section -->
         <div class="section">
             <h2>IndexedDB Database</h2>
             <p><strong>Number of Records in Flowers:</strong> <span id="indexeddb-records">Loading...</span></p>
-            <p><strong>Records with Empty or Null Values:</strong> <span id="indexeddb-empty-records">Loading...</span></p>
+            <p><strong>Records with Empty or Null Values:</strong> <span id="indexeddb-empty-records">Loading...</span>
+            </p>
         </div>
     </div>
 
@@ -89,6 +95,7 @@
         }
 
         // Fetch MongoDB data and show separate counts for null/empty values
+        // Fetch MongoDB data and show separate counts for null/empty values
         async function fetchMongoDBStats() {
             try {
                 const response = await fetch('/mongodb-stats');
@@ -96,12 +103,18 @@
 
                 document.getElementById('flower-db-count').textContent = data.FlowerDatabase;
                 document.getElementById('flower-db-null-count').textContent = data.FlowerDatabaseNull;
-                
+
                 document.getElementById('flower-load-count').textContent = data.FlowerDatabaseLoad;
                 document.getElementById('flower-load-null-count').textContent = data.FlowerDatabaseLoadNull;
 
                 document.getElementById('flower-transform-count').textContent = data.FlowerDatabaseTransform;
                 document.getElementById('flower-transform-null-count').textContent = data.FlowerDatabaseTransformNull;
+
+                // Display delta load counts in brackets
+                document.getElementById('flower-db-delta-load').textContent = `(${data.DeltaLoadFlowerDatabase})`;
+                document.getElementById('flower-load-delta-load').textContent = `(${data.DeltaLoadFlowerDatabaseLoad})`;
+                document.getElementById('flower-transform-delta-load').textContent = `(${data.DeltaLoadFlowerDatabaseTransform})`;
+
             } catch (error) {
                 console.error('Error fetching MongoDB stats:', error);
             }

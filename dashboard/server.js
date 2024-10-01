@@ -59,6 +59,19 @@ app.get('/neo4j-stats', async (req, res) => {
     }
 });
 
+// Baseline counts for delta calculation (could be stored in a config or database)
+const baselineCounts = {
+    FlowerDatabase: 0,
+    FlowerDatabaseLoad: 0,
+    FlowerDatabaseTransform: 0
+};
+
+// Randomness function
+const getRandomOffset = (min, max) => {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+
+// MongoDB stats API for three different databases
 // MongoDB stats API for three different databases
 app.get('/mongodb-stats', async (req, res) => {
     try {
@@ -67,16 +80,16 @@ app.get('/mongodb-stats', async (req, res) => {
         const db2 = mongoClient.db('FlowerDatabaseLoad'); // Second database
         const db3 = mongoClient.db('FlowerDatabaseTransform'); // Third database
 
-        // Aggregation query to count documents where specific fields are null or empty
+        // Function to count documents with null or empty fields
         const countNullOrEmptyFields = async (db, collectionName) => {
             return await db.collection(collectionName).aggregate([
                 {
                     $match: {
                         $or: [
-                            { 'name': { $exists: false } }, // field1 missing
-                            { 'name': { $eq: null } },      // field1 is null
-                            { 'name': { $eq: '' } },        // field1 is an empty string
-                            { 'price': { $exists: false } }, // similar checks for field2
+                            { 'name': { $exists: false } },
+                            { 'name': { $eq: null } },
+                            { 'name': { $eq: '' } },
+                            { 'price': { $exists: false } },
                             { 'price': { $eq: null } },
                             { 'price': { $eq: '' } }
                         ]
@@ -103,6 +116,11 @@ app.get('/mongodb-stats', async (req, res) => {
         const countNull2 = nullCount2.length > 0 ? nullCount2[0].count : 0;
         const countNull3 = nullCount3.length > 0 ? nullCount3[0].count : 0;
 
+        // Generate random deltas
+        const deltaLoadFlowerDatabase = (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 10);
+        const deltaLoadFlowerDatabaseLoad = (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 10);
+        const deltaLoadFlowerDatabaseTransform = (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 10);
+
         // Respond with the count from each collection and null/empty field count
         res.json({
             FlowerDatabase: flowerCount1,
@@ -110,7 +128,10 @@ app.get('/mongodb-stats', async (req, res) => {
             FlowerDatabaseLoad: flowerCount2,
             FlowerDatabaseLoadNull: countNull2,
             FlowerDatabaseTransform: flowerCount3,
-            FlowerDatabaseTransformNull: countNull3
+            FlowerDatabaseTransformNull: countNull3,
+            DeltaLoadFlowerDatabase: (deltaLoadFlowerDatabase >= 0 ? `+${deltaLoadFlowerDatabase}` : deltaLoadFlowerDatabase),
+            DeltaLoadFlowerDatabaseLoad: (deltaLoadFlowerDatabaseLoad >= 0 ? `+${deltaLoadFlowerDatabaseLoad}` : deltaLoadFlowerDatabaseLoad),
+            DeltaLoadFlowerDatabaseTransform: (deltaLoadFlowerDatabaseTransform >= 0 ? `+${deltaLoadFlowerDatabaseTransform}` : deltaLoadFlowerDatabaseTransform),
         });
     } catch (error) {
         console.error('Error fetching MongoDB stats:', error);
