@@ -10,13 +10,58 @@
 <body>
     <h1>Sync Data</h1>
 
+    <button onclick="postData()">Post 1000 Objects to MongoDB</button>
     <button onclick="getData()">Fetch MongoDB Data</button>
+
+    <div id="results"></div>
+
 </body>
 
 <script>
-    // Fetch and display 1000 MongoDB objects
+    // Function to post 1000 MongoDB objects
+    async function postData() {
+        const url = "http://localhost:5000/mongodb/post";
+
+        // Create an array of 1000 objects
+        const data = [];
+        for (let i = 0; i < 1000; i++) {
+            data.push({
+                uuid: i,
+                source: "mongodb",
+                creationTimestamp: Date.now(),
+                updatedTimestamp: Date.now(),
+                A: "A",
+                B: "B",
+                C: "C"
+            });
+        }
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log(result);
+            alert(result.message);
+        } catch (error) {
+            console.error('Error:', error.message);
+        }
+    }
+
+    // Function to fetch and display MongoDB objects
     async function getData() {
         const url = "http://localhost:5000/mongodb";
+        const resultsDiv = document.getElementById("results");
+
         try {
             const response = await fetch(url);
             if (!response.ok) {
@@ -25,9 +70,18 @@
 
             const data = await response.json();
             console.log(data);
-            alert(`Fetched ${data.length} records from MongoDB`);
+
+            // Display the fetched data on the page
+            resultsDiv.innerHTML = `<h3>Fetched ${data.length} records from MongoDB</h3>`;
+            resultsDiv.innerHTML += '<ul>';
+            data.forEach(item => {
+                resultsDiv.innerHTML += `<li>UUID: ${item.uuid}, Source: ${item.source}, A: ${item.A}, B: ${item.B}, C: ${item.C}</li>`;
+            });
+            resultsDiv.innerHTML += '</ul>';
+
         } catch (error) {
             console.error('Error:', error.message);
+            resultsDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
         }
     }
 </script>
