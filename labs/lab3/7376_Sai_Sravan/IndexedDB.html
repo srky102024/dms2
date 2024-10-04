@@ -1,0 +1,90 @@
+<!DOCTYPE HTML>
+<html lang="en">
+    <head>
+        <title>Indexed DB object store</title>
+    </head>
+    <body>
+        <h1>Generate and Store 1000 Objects in IndexedDB</h1>
+        <button id="generate-btn">Generate Objects</button>
+        <p id="status"></p>
+        <script>
+            
+            let db;
+            const request = indexedDB.open("objectDatabase", 1);
+    
+            
+            request.onupgradeneeded = function(event) {
+                db = event.target.result;
+                const objectStore = db.createObjectStore("objects", { keyPath: "UUID" });
+                objectStore.createIndex("source_db", "source_db", { unique: false });
+                objectStore.createIndex("created_at", "created_at", { unique: false });
+                objectStore.createIndex("updated_at", "updated_at", { unique: false });
+                objectStore.createIndex("crop_type", "crop_type", { unique: false });
+                objectStore.createIndex("weather", "weather", { unique: false });
+                objectStore.createIndex("soil_moisture_level", "soil_moisture_level", { unique: false });
+            };
+    
+            
+            request.onerror = function(event) {
+                console.error("Database error: " + event.target.errorCode);
+            };
+    
+            
+            request.onsuccess = function(event) {
+                db = event.target.result;
+                document.getElementById('generate-btn').disabled = false;
+            };
+    
+            
+            function generateUUID() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    const r = Math.random() * 16 | 0;
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+    
+            
+            function generateObject() {
+                return {
+                    UUID: generateUUID(),
+                    source_db: "IndexedDB",
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    "crop_type": "Carrot",
+                    "weather": "Rainy",
+                    "soil_moisture_level": 6.5
+                };
+            }
+    
+            
+            function storeObject(object) {
+                const transaction = db.transaction(["objects"], "readwrite");
+                const objectStore = transaction.objectStore("objects");
+                objectStore.add(object);
+    
+                transaction.onerror = function(event) {
+                    console.error("Transaction error: " + event.target.errorCode);
+                };
+            }
+    
+            
+            function generateAndStoreObjects() {
+                const totalObjects = 1000;
+                for (let i = 0; i < totalObjects; i++) {
+                    const obj = generateObject();
+                    storeObject(obj);
+                }
+    
+                document.getElementById('status').innerText = totalObjects + " objects generated and stored in IndexedDB!";
+            }
+    
+            
+            document.getElementById('generate-btn').addEventListener('click', function() {
+                generateAndStoreObjects();
+                this.disabled = true; 
+            });
+        </script>
+    </body>
+
+</html>
