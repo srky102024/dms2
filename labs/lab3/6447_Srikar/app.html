@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Storage</title>
+</head>
+<body>
+    <button id="generate">Generate and Store 1000 Objects</button>
+    <button id="download">Download as JSON</button>
+    <p id="status"></p>
+
+    <script>
+        const openDB = () => new Promise((resolve, reject) => {
+            const request = indexedDB.open('ObjectDB', 1);
+            request.onupgradeneeded = e => e.target.result.createObjectStore('objects', { keyPath: 'uuid' });
+            request.onsuccess = e => resolve(e.target.result);
+            request.onerror = e => reject(e);
+        });
+
+        const generateUUID = () => crypto.randomUUID();
+        const randomTimestamp = () => new Date().toISOString();
+        const cropTypes = ['Wheat', 'Rice', 'Corn', 'Soybean'];
+        const weatherConditions = ['Sunny', 'Rainy', 'Cloudy', 'Windy'];
+
+        const generateObjects = async () => {
+            const db = await openDB();
+            const transaction = db.transaction('objects', 'readwrite');
+            const store = transaction.objectStore('objects');
+            
+            document.getElementById('status').textContent = 'Generating...';
+
+            for (let i = 0; i < 1000; i++) {
+                const obj = {
+                    uuid: generateUUID(),
+                    source_db: 'IndexedDB',
+                    created_at: randomTimestamp(),
+                    updated_at: randomTimestamp(),
+                    crop_type: cropTypes[Math.floor(Math.random() * cropTypes.length)],
+                    weather: weatherConditions[Math.floor(Math.random() * weatherConditions.length)],
+                    pH_level: (Math.random() * 90 + 10).toFixed(2)
+                };
+                store.add(obj);
+            }
+
+            transaction.oncomplete = () => {
+                document.getElementById('status').textContent = '1000 objects stored successfully!';
+            };
+            transaction.onerror = (e) => {
+                document.getElementById('status').textContent = 'Error storing objects.';
+                console.error('Transaction error:', e);
+            };
+        };
+
+        const downloadJSON = async () => {
+            const db = await openDB();
+            const transaction = db.transaction('objects', 'readonly');
+            const store = transaction.objectStore('objects');
+
+            const allObjects = [];
+
+            // Fetch all objects from the IndexedDB
+            store.openCursor().onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    allObjects.push(cursor.value); // Add the object to the array
+                    cursor.continue(); // Move to the next object
+                } else {
+                    // Once all objects are fetched, create a JSON file
+                    const jsonBlob = new Blob([JSON.stringify(allObjects, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(jsonBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'objects.json'; // File name
+                    document.body.appendChild(a);
+                    a.click(); // Simulate a click to download
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url); // Free up memory
+                    document.getElementById('status').textContent = 'Download complete.';
+                }
+            };
+        };
+
+        document.getElementById('generate').onclick = generateObjects;
+        document.getElementById('download').onclick = downloadJSON;
+    </script>
+</body>
+</html>
