@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Generator</title>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generateBtn">Generate and Store 1000 Objects</button>
+    <div id="status"></div>
+
+    <script>
+        const dbName = "ObjectDatabase";
+        const dbVersion = 1;
+        const storeName = "objects";
+
+        let db;
+
+        const openRequest = indexedDB.open(dbName, dbVersion);
+
+        openRequest.onerror = (event) => {
+            console.error("Database error: " + event.target.error);
+        };
+
+        openRequest.onsuccess = (event) => {
+            db = event.target.result;
+            console.log("Database opened successfully");
+        };
+
+        openRequest.onupgradeneeded = (event) => {
+            db = event.target.result;
+            const objectStore = db.createObjectStore(storeName, { keyPath: "uuid" });
+            console.log("Object store created");
+        };
+
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function generateObject() {
+            const now = new Date();
+            return {
+                uuid: generateUUID(),
+                sourceDB: "IndexedDB",
+                createdAt: now,
+                updatedAt: now,
+                attribute1: Math.floor(Math.random() * 100),
+                attribute2: ["Red", "Green", "Blue"][Math.floor(Math.random() * 3)],
+                attribute3: Math.random() < 0.5
+            };
+        }
+
+        document.getElementById("generateBtn").addEventListener("click", () => {
+            const transaction = db.transaction([storeName], "readwrite");
+            const objectStore = transaction.objectStore(storeName);
+
+            let count = 0;
+            const statusElement = document.getElementById("status");
+
+            function addObject() {
+                if (count < 1000) {
+                    const request = objectStore.add(generateObject());
+                    request.onsuccess = () => {
+                        count++;
+                        statusElement.textContent = `Generated and stored ${count} objects`;
+                        addObject();
+                    };
+                } else {
+                    statusElement.textContent = "Completed: 1000 objects generated and stored";
+                }
+            }
+
+            addObject();
+        });
+    </script>
+</body>
+</html>
