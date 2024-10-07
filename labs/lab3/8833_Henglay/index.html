@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sync Data</title>
+</head>
+
+<body>
+    <h1>Sync Data</h1>
+
+    <div id="data">Data count: 0</div>
+    <button onclick="getData()">Fetch MongoDB Data</button>
+    <button onclick="syncIndexedDBData()">Sync data from mongodb to indexedDB</button>
+    <button onclick="syncMongoDBData()">Sync data from indexedDB to mongodb</button>
+    
+    <div id="output"></div>
+</body>
+
+<script>
+
+    let mongoCarData = [];
+
+    // Get data from MongoDB and display
+    async function getData() {
+        const url = "http://127.0.0.1:5000/mongodb";
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            mongoCarData = await response.json();
+            console.log(mongoCarData);
+            alert(`Fetched ${mongoCarData.length} records from MongoDB`);
+            document.getElementById("output").innerText = JSON.stringify(mongoCarData, null, 2);
+            const dataHTML = document.getElementById('data');
+            dataHTML.textContent = `mongoCarData count: ${mongoCarData.length}`;
+        } catch (error) {
+            console.error('Error:', error.message);
+        }
+
+    }
+
+    // Sync data from mongodb to indexedDB
+    async function syncIndexedDBData() {
+        const request = indexedDB.open('CarDB', 1);
+        request.onupgradeneeded = function(event) {
+            const db = event.target.result;
+            db.createObjectStore('carObjectStore', { keyPath: "uuid"});
+        }
+
+        let db;
+       
+        // Successfully connect to the DB
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            let transaction = db.transaction("carObjectStore", "readwrite");
+            let carObjectStore = transaction.objectStore("carObjectStore");
+            const request = carObjectStore.getAll();
+            request.onsuccess = function(event) {
+                // Data in indexedDB
+                const indexedDBCarData = event.target.result;
+                console.log(indexedDBCarData)
+                mongoCarData.forEach(mongoCar => {
+                    // Check if data from MongoDB exists in IndexedDB
+                    const indexedDBCar = indexedDBCarData.find(indexedDBCar => indexedDBCar.uuid === mongoCar.uuid);
+                    // If not exists in IndexDB, add the data to indexedDB
+                    if (indexedDBCar == null) {
+                        carObjectStore.put(mongoCar);
+                    } else if (indexedDBCar.updated_at < mongoCar.updated_at) {
+                        carObjectStore.put(mongoCar);
+                    }
+                });
+
+            }  
+            request.onerror = function(event) {
+                console.log(event)
+            }
+        }       
+    }
+
+    async function syncMongoDBData() {   
+        const request = indexedDB.open('CarDB', 1);
+        request.onupgradeneeded = function(event) {
+            const db = event.target.result;
+            db.createObjectStore('carObjectStore', { keyPath: "uuid"});
+        }
+
+        let db;
+
+        // Successfully connect to the DB
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            let transaction = db.transaction("carObjectStore", "readwrite");
+            let carObjectStore = transaction.objectStore("carObjectStore");
+            const request = carObjectStore.getAll();
+            request.onsuccess = async function(event) {
+                // Data in indexedDB
+                const indexedDBCarData = event.target.result;
+                
+                const url = "http://127.0.0.1:5000/mongodb/post";
+                // const data = new Array(1000).fill().map((_, i) => ({
+                //     uuid: i, source: "mongodb", creationTimestamp: Date.now(), updatedTimestamp: Date.now(), A: "A", B: "B", C: "C"
+                // }));
+
+                try {
+                    const response = await fetch(url, {
+                        // mode: 'no-cors',
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(indexedDBCarData)
+                    });
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+
+                    const responseData = await response.json();
+                    console.log(responseData);
+                    alert(`Successfully sync MongoDB data!`);
+                } catch (error) {
+                    console.error('Error:', error.message);
+                }
+
+            }  
+            request.onerror = function(event) {
+                console.log(event)
+            }
+        }    
+    }
+</script>
+
+</html>
