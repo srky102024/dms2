@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IndexedDB Object Generator</title>
+    <script src="https://unpkg.com/idb@6.1.0/build/idb.min.js"></script>
+  </head>
+  <body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generate">Generate 1000 Objects</button>
+    <button id="sync-button">Sync Data</button>
+    <script>
+      const dbName = "IndexDB"; // Change the database name as per your implementation
+      let db;
+
+      // Open the IndexedDB database
+      const openDatabase = () => {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = (event) => {
+          db = event.target.result;
+          db.createObjectStore("Sensor", { keyPath: "uuid" });
+        };
+        request.onsuccess = (event) => {
+          db = event.target.result;
+          console.log("Database opened successfully");
+        };
+      };
+
+      // Generate 1000 objects and add them to IndexedDB
+      const generateObjects = () => {
+        const transaction = db.transaction(["Sensor"], "readwrite");
+        const store = transaction.objectStore("Sensor");
+
+        for (let i = 0; i < 1000; i++) {
+          const obj = {
+            uuid: crypto.randomUUID(),
+            source_database: "IndexedDB",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            attribute1: "value1",
+            attribute2: "value2",
+            attribute3: "value3",
+          };
+          store.add(obj);
+        }
+        console.log("Inserted 1000 objects into IndexedDB.");
+      };
+
+      // Sync data from MongoDB to IndexedDB
+      const syncFromMongoDB = async () => {
+        const response = await fetch(
+          "http://localhost:3001/api/7093_collection"
+        );
+        const mongoData = await response.json();
+        let req = indexedDB.open(dbName, 1);
+        req.onsuccess = function (event) {
+          let db = event.target.result;
+          let transaction = db.transaction("Sensor", "readwrite");
+          let sensorStore = transaction.objectStore("Sensor");
+          let getAllRequest = sensorStore.getAll();
+          getAllRequest.onsuccess = function () {
+            const indexedDBData = getAllRequest.result;
+            const indexedDBUuids = new Set(
+              indexedDBData.map((item) => item.uuid)
+            );
+            let addedCount = 0; // To count how many items were added
+
+            mongoData.forEach((mongoItem) => {
+              if (!indexedDBUuids.has(mongoItem.uuid)) {
+                // Prepare the object to match IndexedDB structure
+                const sensorObject = {
+                  uuid: mongoItem.uuid,
+                  source_database: "MongoDB",
+                  created_at: mongoItem.created_at,
+                  updated_at: mongoItem.updated_at,
+                  attribute1: mongoItem.attribute1,
+                  attribute2: mongoItem.attribute2,
+                  attribute3: mongoItem.attribute3,
+                };
+                sensorStore.add(sensorObject);
+                console.log(
+                  `Added new data from MongoDB to IndexedDB: UUID ${mongoItem.uuid}`
+                );
+                addedCount++; // Increment the count of added items
+              } else {
+                console.log(
+                  `UUID ${mongoItem.uuid} already exists in IndexedDB`
+                );
+              }
+            });
+
+            // Log the success message after processing all items
+            console.log(`Data sync completed successfully.`);
+          };
+
+          getAllRequest.onerror = function () {
+            console.error("Error fetching data from IndexedDB");
+          };
+        };
+
+        req.onerror = function (event) {
+          console.error("Error opening IndexedDB:", event.target.errorCode);
+        };
+      };
+
+      document.getElementById("generate").onclick = () => {
+        if (db) {
+          generateObjects();
+        } else {
+          console.error("Database not opened.");
+        }
+      };
+
+      document.getElementById("sync-button").onclick = syncFromMongoDB;
+
+      openDatabase();
+    </script>
+  </body>
+</html>
