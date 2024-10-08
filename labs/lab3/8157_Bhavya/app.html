@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Sync Example</title>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generate">Generate 1000 Objects</button>
+    <button id="sync">Sync to MongoDB</button>
+
+    <script>
+        // IndexedDB setup
+        const dbName = "ObjectDatabase";
+        const request = indexedDB.open(dbName, 1);
+
+        request.onupgradeneeded = function(event) {
+            const db = event.target.result;
+            const objectStore = db.createObjectStore("objects", { keyPath: "uuid" });
+        };
+
+        // Generate 1000 objects and store them in IndexedDB
+        document.getElementById("generate").addEventListener("click", () => {
+            const transaction = request.result.transaction(["objects"], "readwrite");
+            const objectStore = transaction.objectStore("objects");
+
+            for (let i = 0; i < 1000; i++) {
+                const uuid = crypto.randomUUID();
+                const now = new Date();
+
+                const obj = {
+                    uuid: uuid,
+                    source_db: "IndexedDB",
+                    created_at: now.toISOString(),
+                    updated_at: now.toISOString(),
+                    attribute_1: `Value_${i}_1`,
+                    attribute_2: `Value_${i}_2`,
+                    attribute_3: `Value_${i}_3`
+                };
+
+                objectStore.add(obj);
+            }
+            console.log("Generated 1000 objects in IndexedDB.");
+        });
+
+        // Sync IndexedDB to MongoDB via NodeJS API
+        document.getElementById("sync").addEventListener("click", async () => {
+            const transaction = request.result.transaction(["objects"], "readonly");
+            const objectStore = transaction.objectStore("objects");
+
+            const objects = [];
+            const cursor = objectStore.openCursor();
+            cursor.onsuccess = function(event) {
+                const result = event.target.result;
+                if (result) {
+                    objects.push(result.value);
+                    result.continue();
+                } else {
+                    // Send data to NodeJS server
+                    fetch("http://localhost:3000/sync", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(objects)
+                    })
+                    .then(response => response.text())
+                    .then(data => console.log(data))
+                    .catch(error => console.error("Error syncing data:", error));
+                }
+            };
+        });
+    </script>
+</body>
+</html>
