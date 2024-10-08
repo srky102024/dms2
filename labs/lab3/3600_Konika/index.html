@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Data Generator & Sync</title>
+    <!-- Include the uuid library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
+</head>
+<body>
+    <h1>Generate Data and Store in IndexedDB</h1>
+    <button id="generateData">Generate Data</button>
+    <button id="syncData">Sync Data to MongoDB</button> <!-- Sync button -->
+
+    <script>
+        const dbName = '3600db'; // Updated IndexedDB name
+        const storeName = 'dataStore'; // Your object store name
+
+        // Open IndexedDB
+        const openDatabase = () => {
+            const request = indexedDB.open(dbName, 1);
+
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(storeName)) {
+                    db.createObjectStore(storeName, { keyPath: 'uuid' });
+                }
+            };
+
+            request.onsuccess = (event) => {
+                console.log('Database opened successfully');
+                generateData(event.target.result);
+            };
+
+            request.onerror = (event) => {
+                console.error('Database error:', event.target.error);
+            };
+        };
+
+        // Generate data and store it in IndexedDB
+        const generateData = (db) => {
+            const transaction = db.transaction(storeName, 'readwrite');
+            const store = transaction.objectStore(storeName);
+
+            for (let i = 0; i < 1000; i++) {
+                const obj = {
+                    uuid: uuid.v4(),  // Use the uuid library to generate UUIDs
+                    source_db: "IndexedDB",
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    temperature: (20 + Math.random() * 10).toFixed(2), // Random temperature between 20 and 30
+                    humidity: (30 + Math.random() * 20).toFixed(2), // Random humidity between 30 and 50
+                    status: Math.random() > 0.5 ? "active" : "inactive"
+                };
+
+                store.add(obj);
+            }
+
+            transaction.onsuccess = () => {
+                console.log('All data added successfully');
+            };
+
+            transaction.onerror = (event) => {
+                console.error('Transaction error:', event.target.error);
+            };
+        };
+
+        // Sync data from IndexedDB to MongoDB
+        const syncData = () => {
+            const request = indexedDB.open(dbName, 1);
+
+            request.onsuccess = (event) => {
+                const db = event.target.result;
+                const transaction = db.transaction(storeName, 'readonly');
+                const store = transaction.objectStore(storeName);
+                const getAllRequest = store.getAll();
+
+                getAllRequest.onsuccess = async (event) => {
+                    const data = event.target.result;
+                    if (data.length > 0) {
+                        // Send data to the backend (sync.js) using fetch
+                        const response = await fetch('http://localhost:3005/sync', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        const result = await response.text();
+                        console.log('Sync result:', result);
+                    } else {
+                        console.log('No data to sync');
+                    }
+                };
+
+                getAllRequest.onerror = (event) => {
+                    console.error('Error fetching data from IndexedDB:', event.target.error);
+                };
+            };
+        };
+
+        // Add event listeners to buttons
+        document.getElementById('generateData').addEventListener('click', openDatabase);
+        document.getElementById('syncData').addEventListener('click', syncData);
+    </script>
+</body>
+</html>
