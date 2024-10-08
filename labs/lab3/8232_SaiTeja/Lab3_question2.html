@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Example</title>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generate">Generate 1000 Objects</button>
+    <div id="result"></div>
+
+    <script>
+        const dbName = "Lab3";
+        const storeName = "Saiteja";
+        let db;
+
+        // Open (or create) the database with version 2
+        const request = indexedDB.open(dbName, 2);
+
+        request.onerror = (event) => {
+            console.error("Database error: ", event.target.errorCode);
+        };
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            const objectStore = db.createObjectStore(storeName, { keyPath: "uuid" });
+            objectStore.createIndex("source", "source", { unique: false });
+            objectStore.createIndex("createdAt", "createdAt", { unique: false });
+            objectStore.createIndex("updatedAt", "updatedAt", { unique: false });
+            objectStore.createIndex("attribute1", "attribute1", { unique: false });
+            objectStore.createIndex("attribute2", "attribute2", { unique: false });
+            objectStore.createIndex("attribute3", "attribute3", { unique: false });
+        };
+
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            console.log("Database initialized");
+        };
+
+        document.getElementById("generate").addEventListener("click", () => {
+            generateAndStoreObjects(1000);
+        });
+
+        function generateAndStoreObjects(count) {
+            const transaction = db.transaction([storeName], "readwrite");
+            const objectStore = transaction.objectStore(storeName);
+
+            for (let i = 0; i < count; i++) {
+                const { attribute1, attribute2, attribute3 } = generateRandomlyAttr();
+
+                const object = {
+                    uuid: generateUUID(),
+                    source: "IndexedDB",
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    attribute1: attribute1,  // Using randomly generated attribute1
+                    attribute2: attribute2,  // Using randomly generated attribute2
+                    attribute3: attribute3   // Using randomly generated attribute3
+                };
+
+                objectStore.add(object);
+            }
+
+            transaction.oncomplete = () => {
+                document.getElementById("result").innerText = "1000 objects generated and stored in IndexedDB.";
+                console.log("All objects have been added to the database.");
+            };
+
+            transaction.onerror = (event) => {
+                console.error("Transaction error: ", event.target.error);
+            };
+        }
+
+        function generateRandomlyAttr() {
+            const attribute1 = Math.floor(Math.random() * 100) + 1; // Random integer between 1 and 100
+            const attribute2 = ["Tiger", "Lion", "Bull", "Leopard"][Math.floor(Math.random() * 4)]; // Random selection
+            const attribute3 = Math.random() * (10.0 - 1.0) + 1.0; // Random float between 1.0 and 10.0
+            return { attribute1, attribute2, attribute3 };
+        }
+        function generateUUID() {
+            let uuid = "";
+            const chars = "0123456789abcdef"; // Hexadecimal characters
+            for (let i = 0; i < 36; i++) {
+                if (i === 8 || i === 13 || i === 18 || i === 23) {
+                    uuid += "-";  
+                } else if (i === 14) {
+                    uuid += "4";  
+                } else if (i === 19) {
+                    uuid += chars[(Math.random() * 4 + 8) | 0];  
+                } else {
+                    uuid += chars[(Math.random() * 16) | 0];  
+                }
+            }
+            return uuid;
+        }
+
+    </script>
+</body>
+</html>
