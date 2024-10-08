@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Example</title>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generate">Generate Objects</button>
+    <div id="status"></div>
+
+    <script>
+        const dbName = 'TestDB';
+        const storeName = 'TestStore';
+
+        // Open IndexedDB
+        let db;
+        const request = indexedDB.open(dbName, 1);
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            const objectStore = db.createObjectStore(storeName, { keyPath: 'uuid' });
+            objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            document.getElementById('generate').addEventListener('click', generateObjects);
+        };
+
+        request.onerror = function(event) {
+            console.error("Database error: " + event.target.errorCode);
+        };
+
+        // Function to generate 1000 objects
+        function generateObjects() {
+            const transaction = db.transaction([storeName], 'readwrite');
+            const objectStore = transaction.objectStore(storeName);
+
+            for (let i = 0; i < 1000; i++) {
+                const object = {
+                    uuid: crypto.randomUUID(),
+                    source: "IndexedDB",
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    attribute1: `value${i + 1}`,
+                    attribute2: `extra${i + 1}`,
+                    attribute3: Math.floor(Math.random() * 100)
+                };
+                objectStore.add(object);
+            }
+
+            transaction.oncomplete = function() {
+                document.getElementById('status').innerText = '1000 objects added to IndexedDB.';
+            };
+
+            transaction.onerror = function(event) {
+                console.error("Transaction error: " + event.target.errorCode);
+            };
+        }
+    </script>
+</body>
+</html>
