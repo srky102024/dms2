@@ -1,1 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sync Data</title>
+</head>
+
+<body>
+    <h1>Sync Data</h1>
+
+    <button onclick="getData()">Fetch MongoDB Data</button>
+    <button onclick="postData()">Post 1000 MongoDB Objects</button>
+    
+    <div id="output"></div>
+</body>
+
+<script>
+    // 1. Create IndexedDB database
+    // 2. Create IndexedDB object store
+    
+    // Fetch and display 1000 MongoDB objects
+    let db;
+    let request = indexedDB.open('NewoneDB', 1);
+
+    request.onupgradeneeded = function(event) {
+        db = event.target.result;
+        if (!db.objectStoreNames.contains('dataone')) {
+            db.createObjectStore('dataone', { keyPath: 'id', autoIncrement: true });
+        }
+    };
+
+    request.onsuccess = function(event) {
+        db = event.target.result;
+        console.log('Database opened successfully');
+    };
+
+    request.onerror = function(event) {
+        console.error('Database error:', event.target.errorCode);
+    };
+
+// Store data in IndexedDB
+async function storeDataInIndexedDB(data) {
+    try {
+        // const db = await openIndexedDB();
+        const transaction = db.transaction(["dataone"], "readwrite");
+        const objectStore = transaction.objectStore("dataone");
+        
+        console.log(data);
+
+        data.forEach(item => {
+            objectStore.put(item); // Store the items by 'uuid'
+        });
+
+        transaction.oncomplete = () => {
+            console.log("All data has been stored in IndexedDB");
+        };
+
+        transaction.onerror = (event) => {
+            console.error("Transaction error:", event);
+        };
+    } catch (error) {
+        console.error("Failed to store data in IndexedDB:", error);
+    }
+}
+
+// Fetch data from MongoDB and store in IndexedDB
+async function getData() {
+    const url = "http://localhost:5000/mongodb";
+    try {
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log(data);
+
+        // Store the fetched data in IndexedDB
+        await storeDataInIndexedDB(data);
+
+        alert(`Fetched ${data.length} records from MongoDB and stored in IndexedDB`);
+        document.getElementById("output").innerText = JSON.stringify(data, null, 2);
+    } catch (error) {
+        console.error('Error:', error.message);
+    }
+}
+
+    // Post 1000 objects to MongoDB
+    async function postData() {
+        const url = "http://localhost:5000/mongodb/post";
+        const data = new Array(1000).fill().map((_, i) => ({
+            uuid: crypto.randomUUID(), source: "indexedDB", creationTimestamp: Date.now(), updatedTimestamp: Date.now(), A: "A", B: "B", C: "C"
+        }));
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            const responseData = await response.json();
+            console.log(responseData);
+            alert(`Successfully posted 1000 objects!`);
+        } catch (error) {
+            console.error('Error:', error.message);
+        }
+    }
+</script>
+
+</html>
