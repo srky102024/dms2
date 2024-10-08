@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MongoDB Object Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        h1 {
+            color: #4CAF50;
+        }
+        .button-container {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin: 5px;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            width: 80%;
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>MongoDB Object Manager</h1>
+
+    <div class="button-container">
+        <button onclick="fetchData()">Fetch Objects from MongoDB</button>
+        <button onclick="postData()">Post 1000 Objects to MongoDB</button>
+    </div>
+
+    <div id="result">Results will be displayed here...</div>
+
+    <script>
+        // Function to fetch objects from MongoDB
+        async function fetchData() {
+            const url = "http://127.0.0.1:5001/api/mongodb";
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const data = await response.json();
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+                alert(`Fetched ${data.length} records from MongoDB`);
+            } catch (error) {
+                console.error('Error:', error.message);
+                alert('Failed to fetch data from MongoDB');
+            }
+        }
+
+        // Function to post 1000 objects to MongoDB
+        async function postData() {
+            const url = "http://127.0.0.1:5001/api/mongodb/post";
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const result = await response.json();
+                alert(result.message);
+            } catch (error) {
+                console.error('Error:', error.message);
+                alert('Failed to post data to MongoDB');
+            }
+        }
+    </script>
+
+</body>
+</html>
