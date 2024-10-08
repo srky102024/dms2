@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IndexedDB and MongoDB Sync</title>
+</head>
+<body>
+<h1>IndexedDB and MongoDB Sync</h1>
+
+<!-- Button to fetch data from MongoDB via Flask API and store in IndexedDB -->
+<button onclick="fetchDataFromMongoDB()">Fetch and Store Data in IndexedDB</button>
+
+<!-- Button to post data from IndexedDB to MongoDB via Flask API -->
+<button onclick="postDataToMongoDB()">Post IndexedDB Data to MongoDB</button>
+
+<p id="status">Status: Waiting for action...</p>
+
+<script src="app.js"></script>
+</body>
+</html>
