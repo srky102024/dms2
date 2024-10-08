@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APP</title>
+</head>
+<body>
+<h1>IndexedDB Object Generator</h1>
+<button onclick = startGenerate()>Generate 1000 Sensors</button>
+<button onclick = syncData()>Sync Index to MongoDB Data</button>
+<button onclick = syncFromMongoDB()>Sync MongoDB to Index Data</button>
+<script>
+  function getCurrentTimestamp() {
+    return new Date().toISOString();
+  }
+  function generateRandomID() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  }
+  function generateRandomLocation() {
+    const latitude = (Math.random() * 180 - 90).toFixed(6);
+    const longitude = (Math.random() * 360 - 180).toFixed(6);
+    return { latitude, longitude };
+  }
+  function generateRandomStatus() {
+    const statuses = ['working', 'maintenance', 'error'];
+    return statuses[Math.floor(Math.random() * statuses.length)];
+  }
+  function generateObject() {
+    return {
+      uuid: crypto.randomUUID(),
+      sourceDB: "IndexedDB",
+      createdTime: getCurrentTimestamp(),
+      updatedTime: getCurrentTimestamp(),
+      sensorID: generateRandomID(),
+      sensorLocation: generateRandomLocation(),
+      sensorStatus: generateRandomStatus()
+    };
+  }
+  function startGenerate(){
+    let req = indexedDB.open("IndexDB", 1);
+    req.onupgradeneeded = function(event) {
+      let db = event.target.result;
+      db.createObjectStore("Sensor", { keyPath: "id" ,autoIncrement: true});
+
+    };
+    req.onsuccess = function(event) {
+      let db = event.target.result;
+      let transactionSensor = db.transaction("Sensor", "readonly");
+      let sensorObjectStore = transactionSensor.objectStore("Sensor");
+      let countRequest = sensorObjectStore.count();
+      countRequest.onsuccess = function() {
+        if (countRequest.result === 0) {
+          let transaction = db.transaction("Sensor", "readwrite");
+          let sensorObjectStoreWrite = transaction.objectStore("Sensor");
+          for (let i = 0; i < 1000; i++) {
+            sensorObjectStoreWrite.add(generateObject());
+          }
+          console.log('1000 sensors data have been added!!!');
+          console.log('Starting export IndexedDB data to JSON file...');
+          indexDBExport();
+          console.log('Sensor data has been exported to JSON file!!!');
+        } else {
+          console.log(`Database already contains ${countRequest.result} records, stop data generation.`);
+          indexDBExport();
+          console.log('Sensor data has been exported to JSON file!!!');
+        }
+      };
+
+      countRequest.onerror = function() {
+        console.error('Error counting records in object store');
+      };
+    };
+    req.onerror = function(event) {
+      console.error('Error opening IndexedDB:', event.target.errorCode);
+    };
+  }
+
+  async function syncData() {
+    let req = indexedDB.open("IndexDB", 1);
+    req.onsuccess = async function(event) {
+      let db = event.target.result;
+      let transaction = db.transaction("Sensor", "readonly");
+      let sensorStore = transaction.objectStore("Sensor");
+      let getAllRequest = sensorStore.getAll();
+      getAllRequest.onsuccess = async function() {
+        const sensorData = getAllRequest.result;
+        const response = await fetch('http://localhost:3000/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(sensorData)
+        });
+        if (response.ok) {
+          console.log('Data successfully synced with MongoDB');
+        } else {
+          console.error('Failed to sync data');
+        }
+      };
+      getAllRequest.onerror = function() {
+        console.error('Error fetching data from IndexedDB');
+      };
+    };
+  }
+
+  async function syncFromMongoDB() {
+    const response = await fetch('http://localhost:3000/fetch');
+    const mongoData = await response.json();
+    let req = indexedDB.open("IndexDB", 1);
+    req.onsuccess = function(event) {
+      let db = event.target.result;
+      let transaction = db.transaction("Sensor", "readwrite");
+      let sensorStore = transaction.objectStore("Sensor");
+      let getAllRequest = sensorStore.getAll();
+      getAllRequest.onsuccess = function() {
+        const indexedDBData = getAllRequest.result;
+        const indexedDBUuids = new Set(indexedDBData.map(item => item.uuid));
+        mongoData.forEach(mongoItem => {
+          if (!indexedDBUuids.has(mongoItem.uuid)) {
+            sensorStore.add(mongoItem);
+            console.log(`Added new data from MongoDB to IndexedDB: UUID ${mongoItem.uuid}`);
+          } else {
+            console.log(`UUID ${mongoItem.uuid} already exists in IndexedDB`);
+          }
+        });
+      };
+      getAllRequest.onerror = function() {
+        console.error('Error fetching data from IndexedDB');
+      };
+    };
+    req.onerror = function(event) {
+      console.error('Error opening IndexedDB:', event.target.errorCode);
+    };
+  }
+</script>
+</body>
+</html>
