@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Storage</title>
+    <!-- Adding Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Adding CSS Styles -->
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2em;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        p {
+            font-size: 1.1em;
+            color: #7f8c8d;
+        }
+
+        button {
+            background-color: #2980b9;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 12px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background-color: #3498db;
+        }
+
+        .loading {
+            margin-top: 20px;
+            font-size: 1em;
+            color: #27ae60;
+        }
+    </style>
+    <script>
+        // Function to create or open IndexedDB
+        function createIndexedDB() {
+            let request = indexedDB.open("ObjectStoreDB", 1);
+
+            // Handle database upgrade event
+            request.onupgradeneeded = function(event) {
+                let db = event.target.result;
+
+                // Create an object store for the objects with a keyPath of "uuid"
+                let objectStore = db.createObjectStore("objects", { keyPath: "uuid" });
+
+                // Define the attributes (indexes) in the object store
+                objectStore.createIndex("item_name", "item_name", { unique: false });
+                objectStore.createIndex("category", "category", { unique: false });
+                objectStore.createIndex("price", "price", { unique: false });
+
+                console.log("Object store created.");
+            };
+
+            request.onsuccess = function(event) {
+                let db = event.target.result;
+                console.log("Database opened successfully.");
+                generateAndStoreObjects(db); // Start generating and storing objects
+            };
+
+            request.onerror = function(event) {
+                console.error("Error opening database:", event.target.errorCode);
+            };
+        }
+
+        // Function to generate 1000 objects
+        function generateAndStoreObjects(db) {
+            let transaction = db.transaction(["objects"], "readwrite");
+            let objectStore = transaction.objectStore("objects");
+
+            for (let i = 0; i < 1000; i++) {
+                let object = {
+                    uuid: self.crypto.randomUUID(),
+                    source_database: "IndexedDB",
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    item_name: `Item_${i}`,
+                    category: `Category_${i % 10}`,  // 10 different categories
+                    price: (10 + i * 0.5).toFixed(2)  // Price starting from 10, increasing by 0.5
+                };
+
+                let request = objectStore.add(object);
+                request.onsuccess = function() {
+                    console.log(`Object ${i} added to IndexedDB.`);
+                };
+                request.onerror = function(event) {
+                    console.error("Error adding object:", event.target.errorCode);
+                };
+            }
+
+            transaction.oncomplete = function() {
+                document.getElementById("status").innerText = "All objects have been added to IndexedDB.";
+            };
+        }
+
+        // Run the function to create/open IndexedDB when the page loads
+        window.onload = function() {
+            document.getElementById("generateBtn").addEventListener("click", function() {
+                createIndexedDB();
+                document.getElementById("status").innerText = "Generating and storing 1000 objects...";
+            });
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>IndexedDB Object Storage</h1>
+        <p>Click the button below to generate and store 1000 objects in IndexedDB.</p>
+        <button id="generateBtn">Generate & Store Objects</button>
+        <div id="status" class="loading"></div>
+    </div>
+</body>
+</html>
