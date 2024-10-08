@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Storage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        h1 {
+            color: #4CAF50;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>IndexedDB Object Storage</h1>
+    <button onclick="generateAndStoreObjects()">Generate and Store 1000 Objects</button>
+    <div id="status"></div>
+
+    <script>
+        // Sample data for generating random names and gender
+        const names = ["Alice", "Bob", "Charlie", "David", "Eva", "Fay", "George", "Hannah", "Ivan", "Julia"];
+        const genders = ["Male", "Female", "Other"];
+
+        // Function to generate 1000 objects and store them in IndexedDB
+        function generateAndStoreObjects() {
+            // Open or create the IndexedDB database
+            let request = indexedDB.open("ObjectDatabase", 1);
+
+            request.onupgradeneeded = function(event) {
+                let db = event.target.result;
+                // Create an object store (table) named "Objects" with "uuid" as the keyPath
+                let objectStore = db.createObjectStore("Objects", { keyPath: "uuid" });
+                objectStore.createIndex("sourceDatabase", "sourceDatabase", { unique: false });
+                objectStore.createIndex("createdAt", "createdAt", { unique: false });
+                objectStore.createIndex("updatedAt", "updatedAt", { unique: false });
+                objectStore.createIndex("name", "name", { unique: false });
+                objectStore.createIndex("age", "age", { unique: false });
+                objectStore.createIndex("gender", "gender", { unique: false });
+            
+            };
+
+            request.onsuccess = function(event) {
+                let db = event.target.result;
+                let transaction = db.transaction("Objects", "readwrite");
+                let objectStore = transaction.objectStore("Objects");
+
+                // Generate 1000 objects
+                for (let i = 0; i < 1000; i++) {
+                    let object = {
+                        uuid: crypto.randomUUID(),
+                        sourceDatabase: "IndexedDB",
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        name: names[Math.floor(Math.random() * names.length)],
+                        age: Math.floor(Math.random() * (65 - 18 + 1)) + 18, // Random age between 18 and 65
+                        gender: genders[Math.floor(Math.random() * genders.length)],
+                
+                    };
+                    objectStore.add(object);
+                }
+
+                transaction.oncomplete = function() {
+                    document.getElementById("status").textContent = "Successfully stored 1000 objects in IndexedDB.";
+                };
+
+                transaction.onerror = function() {
+                    document.getElementById("status").textContent = "Error storing objects in IndexedDB.";
+                };
+            };
+
+            request.onerror = function() {
+                document.getElementById("status").textContent = "Failed to open or create IndexedDB.";
+            };
+        }
+    </script>
+
+</body>
+</html>
