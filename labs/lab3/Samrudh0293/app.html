@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Generator</title>
+    <script>
+        async function storeObjects() {
+            const dbRequest = indexedDB.open('lab3', 1);
+
+            dbRequest.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                const objectStore = db.createObjectStore('0293', { keyPath: 'uuid' });
+                objectStore.createIndex('source', 'source', { unique: false });
+                objectStore.createIndex('task_number', 'task_number', { unique: false });
+                objectStore.createIndex('status', 'status', { unique: false });
+                objectStore.createIndex('computing_cost', 'computing_cost', { unique: false });
+            };
+
+            dbRequest.onsuccess = (event) => {
+                const db = event.target.result;
+                const transaction = db.transaction(['0293'], 'readwrite');
+                const objectStore = transaction.objectStore('0293');
+                const totalObjects = 1000;
+                let addedObjects = 0;
+
+                for (let i = 0; i < totalObjects; i++) {
+                    const object = {
+                        uuid: crypto.randomUUID(),
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                        source: `IndexedDB`,
+                        task_number: `task_${i + 1}`,
+                        computing_cost: Math.floor(Math.random() * 100) + 1,
+                        status: Math.random() < 0.5 ? 'processing' : 'completed'
+                    };
+
+                    const request = objectStore.add(object);
+
+                    request.onsuccess = () => {
+                        addedObjects++;
+                        document.getElementById('status').textContent = `Status: Added ${addedObjects} / ${totalObjects} objects.`;
+                    };
+
+                    request.onerror = (event) => {
+                        console.error('Error adding object: ', event.target.error);
+                    };
+                }
+
+                transaction.oncomplete = () => {
+                    document.getElementById('status').textContent = 'Status: Successfully stored 1000 objects in IndexedDB!';
+                };
+
+                transaction.onerror = (event) => {
+                    document.getElementById('status').textContent = 'Status: Failed to store objects!';
+                    console.error('Transaction failed: ', event.target.error);
+                };
+            };
+
+            dbRequest.onerror = (event) => {
+                document.getElementById('status').textContent = 'Status: Database connection error!';
+                console.error('Database error: ', event.target.error);
+            };
+        }
+    </script>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button onclick="storeObjects()">Generate and Store 1000 Objects</button>
+    <p id="status">Status: Ready to generate and store objects.</p>
+</body>
+</html>
