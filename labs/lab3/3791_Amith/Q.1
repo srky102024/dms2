@@ -1,0 +1,44 @@
+!pip install pymongo
+!pip install uuid
+
+import pymongo
+import uuid
+from datetime import datetime
+
+# Connect to MongoDB
+client = pymongo.MongoClient("mongodb+srv://i40:dbms2@cluster0.lixbqmp.mongodb.net/lab3")
+
+# Define database and collection
+db = client['lab3']
+collection_name = '3791_AmithGopi'
+collection = db[collection_name]
+
+# Clear the collection to avoid duplicates
+collection.delete_many({})
+
+# Create and insert exactly 1000 objects into the collection
+objects = []
+for i in range(1000):
+obj = {
+ "_id": str(uuid.uuid4()), 
+ "uuid": str(uuid.uuid4()), 
+ "source_database": "MongoDB", 
+ "created_at": datetime.utcnow().isoformat(), 
+ "updated_at": datetime.utcnow().isoformat(), 
+ "attribute1": f"attribute_value_{i}", 
+ "attribute2": f"attribute_value_{i+1}", 
+ "attribute3": f"attribute_value_{i+2}" 
+}
+objects.append(obj)
+
+# Insert objects into the collection
+collection.insert_many(objects)
+
+# Check the count to verify there are exactly 1000 documents
+count = collection.count_documents({})
+print(f"Total documents in collection: {count}")
+
+# Retrieve and display 5 sample documents from the collection
+sample_data = collection.find().limit(5)
+for data in sample_data:
+print(data)
