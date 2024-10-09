@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Sync</title>
+    <script>
+        let db;
+
+        // Open or create IndexedDB database
+        function openIndexedDB() {
+            const request = indexedDB.open("mydatabase", 1);
+
+            request.onupgradeneeded = (event) => {
+                db = event.target.result;
+                const objectStore = db.createObjectStore("tasks", { keyPath: "id", autoIncrement: true });
+                objectStore.createIndex("name", "name", { unique: false });
+                objectStore.createIndex("completed", "completed", { unique: false });
+            };
+
+            request.onsuccess = (event) => {
+                db = event.target.result;
+                console.log("IndexedDB is opened successfully.");
+            };
+
+            request.onerror = (event) => {
+                console.error("Error opening IndexedDB:", event.target.errorCode);
+            };
+        }
+
+        // Add data to IndexedDB
+        function addTask(name, completed) {
+            const transaction = db.transaction(["tasks"], "readwrite");
+            const objectStore = transaction.objectStore("tasks");
+
+            const task = { name: name, completed: completed };
+            objectStore.add(task);
+
+            transaction.oncomplete = () => {
+                console.log("Task added to IndexedDB.");
+            };
+
+            transaction.onerror = (event) => {
+                console.error("Error adding task:", event.target.errorCode);
+            };
+        }
+
+        // Fetch all tasks from IndexedDB
+        function getAllTasks() {
+            const transaction = db.transaction(["tasks"], "readonly");
+            const objectStore = transaction.objectStore("tasks");
+
+            const request = objectStore.getAll();
+            request.onsuccess = (event) => {
+                console.log("Tasks fetched from IndexedDB:", event.target.result);
+                syncTasks(event.target.result);
+            };
+
+            request.onerror = (event) => {
+                console.error("Error fetching tasks:", event.target.errorCode);
+            };
+        }
+
+        // Sync IndexedDB data with MongoDB (via Node.js server)
+        function syncTasks(tasks) {
+            fetch('http://localhost:3005/sync', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(tasks)
+            })
+            .then(response => response.text())
+            .then(data => {
+                console.log('Sync success:', data);
+            })
+            .catch(error => {
+                console.error('Sync error:', error);
+            });
+        }
+
+        // Add sample tasks to IndexedDB and sync them to MongoDB
+        function addAndSyncTasks() {
+            addTask("Task 1", false);
+            addTask("Task 2", true);
+            setTimeout(getAllTasks, 1000); // Delay to ensure tasks are added before fetching
+        }
+
+        // Initialize the app
+        window.onload = () => {
+            openIndexedDB();
+        };
+    </script>
+</head>
+<body>
+    <h1>IndexedDB and MongoDB Sync</h1>
+    <button onclick="addAndSyncTasks()">Add and Sync Tasks</button>
+</body>
+</html>
