@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IndexedDB Example</title>
+</head>
+<body>
+    <h1>IndexedDB Object Storage</h1>
+    <button onclick="initializeDB()">Generate and Store 1000 Objects</button>
+    <p id="status"></p>
+
+    <script>
+        function initializeDB() {
+            const request = indexedDB.open("ObjectDB", 1);
+            
+            request.onupgradeneeded = function(event) {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains("objects")) {
+                    const objectStore = db.createObjectStore("objects", { keyPath: "uuid" });
+                }
+            };
+            
+            request.onsuccess = function(event) {
+                const db = event.target.result;
+                const transaction = db.transaction("objects", "readwrite");
+                const objectStore = transaction.objectStore("objects");
+
+                for (let i = 0; i < 1000; i++) {
+                    const obj = {
+                    uuid: crypto.randomUUID(),
+                    source: "IndexedDB",
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    attribute1: Math.random().toString(36).substring(2, 10), 
+                    attribute2: Math.floor(Math.random() * 1000),             
+                    attribute3: `Data_${Date.now() + i}`                     
+    };
+                    objectStore.add(obj);
+                }
+
+                transaction.oncomplete = function() {
+                    document.getElementById("status").textContent = "1000 Objects Added Successfully!";
+                };
+                
+                transaction.onerror = function() {
+                    document.getElementById("status").textContent = "Error Adding Objects";
+                };
+            };
+
+            request.onerror = function(event) {
+                document.getElementById("status").textContent = "Database Error: " + event.target.errorCode;
+            };
+        }
+    </script>
+</body>
+</html>
