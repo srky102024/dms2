@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Example</title>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generate">Generate 1000 Objects</button>
+    <script>
+        // Function to generate UUID
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Function to open IndexedDB
+        function openDatabase() {
+            const request = indexedDB.open('myDatabase', 1);
+
+            request.onupgradeneeded = function(event) {
+                const db = event.target.result;
+                const objectStore = db.createObjectStore('myObjectStore', { keyPath: 'id' });
+                objectStore.createIndex('source', 'source', { unique: false });
+            };
+
+            return request;
+        }
+
+        // Function to generate and store objects
+        function generateAndStoreObjects() {
+            const dbRequest = openDatabase();
+
+            dbRequest.onsuccess = function(event) {
+                const db = event.target.result;
+                const transaction = db.transaction(['myObjectStore'], 'readwrite');
+                const objectStore = transaction.objectStore('myObjectStore');
+
+                for (let i = 0; i < 1000; i++) {
+                    const object = {
+                        id: generateUUID(),
+                        source: "IndexedDB",
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        attribute1: `Attribute1_${i}`,
+                        attribute2: `Attribute2_${i}`,
+                        attribute3: `Attribute3_${i}`
+                    };
+                    objectStore.add(object);
+                }
+
+                transaction.oncomplete = function() {
+                    console.log('All objects added to the database.');
+                };
+
+                transaction.onerror = function(event) {
+                    console.error('Transaction failed:', event.target.error);
+                };
+            };
+
+            dbRequest.onerror = function(event) {
+                console.error('Database error:', event.target.error);
+            };
+        }
+
+        // Add event listener to the button
+        document.getElementById('generate').addEventListener('click', generateAndStoreObjects);
+    </script>
+</body>
+</html>
