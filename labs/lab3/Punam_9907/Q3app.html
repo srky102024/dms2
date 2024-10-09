@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sync MongoDB with IndexedDB</title>
+  </head>
+  <body>
+    <h1>Sync MongoDB Atlas Data with IndexedDB</h1>
+    <button id="syncButton">Sync Data</button>
+    <div id="status"></div>
+
+    <script>
+      const dbName = "SampleDB";
+      const storeName = "SampleStore";
+      let db;
+
+      // Open IndexedDB
+      const request = indexedDB.open(dbName, 1);
+
+      request.onupgradeneeded = function (event) {
+        db = event.target.result;
+        const objectStore = db.createObjectStore(storeName, {
+          keyPath: "uuid",
+        });
+      };
+
+      request.onsuccess = function (event) {
+        db = event.target.result;
+        document
+          .getElementById("syncButton")
+          .addEventListener("click", syncData);
+      };
+
+      request.onerror = function (event) {
+        console.error("Database error: ", event.target.errorCode);
+      };
+
+      // Function to fetch data from MongoDB and sync with IndexedDB
+      async function syncData() {
+        const statusDiv = document.getElementById("status");
+        statusDiv.innerHTML = "Syncing data...";
+
+        // Fetch data from MongoDB via Node.js backend
+        const response = await fetch("http://localhost:3000/fetchMongoData");
+        const mongoData = await response.json();
+
+        // Start IndexedDB transaction
+        const transaction = db.transaction([storeName], "readwrite");
+        const objectStore = transaction.objectStore(storeName);
+
+        // Loop through MongoDB data and add to IndexedDB
+        mongoData.forEach((record) => {
+          objectStore.put(record); // Using put to insert or update based on the key (uuid)
+        });
+
+        transaction.oncomplete = function () {
+          statusDiv.innerHTML = "Data synced with IndexedDB!";
+        };
+
+        transaction.onerror = function (event) {
+          console.error("Transaction error: ", event.target.errorCode);
+          statusDiv.innerHTML = "Error syncing data.";
+        };
+      }
+    </script>
+  </body>
+</html>
