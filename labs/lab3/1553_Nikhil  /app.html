@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Generator</title>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generateBtn">Generate and Store 1000 Objects</button>
+    <div id="status"></div>
+
+    <script>
+        let db;
+        const dbName = "ObjectDatabase";
+        const storeName = "objects";
+
+        // Initialize IndexedDB
+        const request = indexedDB.open(dbName, 1);
+
+        request.onerror = (event) => {
+            console.error("IndexedDB error:", event.target.error);
+        };
+
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            console.log("Database opened successfully");
+        };
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            const objectStore = db.createObjectStore(storeName, { keyPath: "uuid" });
+            console.log("Object store created");
+        };
+
+        // Generate a UUID
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Generate and store objects
+        function generateAndStoreObjects() {
+            const transaction = db.transaction([storeName], "readwrite");
+            const objectStore = transaction.objectStore(storeName);
+
+            const names = [
+                "Emma", "Liam", "Olivia", "Noah", "Ava", "Ethan", "Sophia", "Mason",
+                "Isabella", "William", "Mia", "James", "Charlotte", "Benjamin", "Amelia",
+                "Lucas", "Harper", "Henry", "Evelyn", "Alexander", "Abigail", "Michael",
+                "Emily", "Daniel", "Elizabeth", "Jacob", "Sofia", "Logan", "Avery", "Jackson"
+            ];
+
+            for (let i = 0; i < 1000; i++) {
+                const name = names[Math.floor(Math.random() * names.length)];
+                const age = Math.floor(Math.random() * 80) + 18; // Age between 18 and 97
+                const gender = Math.random() < 0.49 ? "Male" : (Math.random() < 0.98 ? "Female" : "Other");
+
+                const object = {
+                    uuid: generateUUID(),
+                    sourceDatabase: "IndexedDB",
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    name: name,
+                    age: age,
+                    gender: gender
+                };
+
+                const request = objectStore.add(object);
+                request.onerror = (event) => {
+                    console.error("Error adding object:", event.target.error);
+                };
+            }
+
+            transaction.oncomplete = () => {
+                console.log("All objects stored successfully");
+                document.getElementById("status").textContent = "1000 objects generated and stored successfully!";
+            };
+        }
+
+        // Attach event listener to the button
+        document.getElementById("generateBtn").addEventListener("click", generateAndStoreObjects);
+    </script>
+</body>
+</html>
