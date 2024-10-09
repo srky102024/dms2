@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #status {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button onclick="generateObjects()">Generate and Store 1000 Objects</button>
+    <div id="status"></div>
+
+    <script>
+        // Function to set up IndexedDB
+        function setupIndexedDB(callback) {
+            let request = indexedDB.open('ObjectDB', 1);
+
+            request.onupgradeneeded = function(event) {
+                let db = event.target.result;
+
+                // Create object store and set the primary key as UUID
+                if (!db.objectStoreNames.contains('objects')) {
+                    let objectStore = db.createObjectStore('objects', { keyPath: 'uuid' });
+                    objectStore.createIndex('name', 'name', { unique: false });
+                    objectStore.createIndex('age', 'age', { unique: false });
+                }
+            };
+
+            request.onsuccess = function(event) {
+                let db = event.target.result;
+                callback(db);
+            };
+
+            request.onerror = function(event) {
+                console.error('Error opening IndexedDB:', event);
+            };
+        }
+
+        // Function to generate UUID (random string as unique identifier)
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0,
+                    v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Function to generate random name, age, and gender
+        function generateRandomName() {
+            const names = ['John', 'Alice', 'Ron', 'Daisy', 'Sophia', 'Tom', 'Emma', 'Olivia', 'Robert', 'Mike'];
+            return names[Math.floor(Math.random() * names.length)];
+        }
+
+        function generateRandomAge() {
+            return Math.floor(Math.random() * 43) + 18; // Random age between 18 and 60
+        }
+
+        function generateRandomGender() {
+            return Math.random() < 0.5 ? 'Male' : 'Female'; // Randomly assign Male or Female
+        }
+
+        // Function to generate and store 1000 objects in IndexedDB
+        function generateObjects() {
+            setupIndexedDB(function(db) {
+                let transaction = db.transaction('objects', 'readwrite');
+                let objectStore = transaction.objectStore('objects');
+
+                for (let i = 0; i < 1000; i++) {
+                    let object = {
+                        uuid: generateUUID(),
+                        source_database: 'IndexedDB',
+                        created_at: new Date(),
+                        updated_at: new Date(),
+                        name: generateRandomName(),
+                        age: generateRandomAge(),
+                        gender: generateRandomGender()
+                    };
+
+                    objectStore.add(object);
+                }
+
+                transaction.oncomplete = function() {
+                    document.getElementById('status').innerText = 'Successfully generated and stored 1000 objects!';
+                };
+
+                transaction.onerror = function(event) {
+                    console.error('Error storing objects:', event);
+                };
+            });
+        }
+    </script>
+</body>
+</html>
