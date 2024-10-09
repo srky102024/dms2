@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Storage</title>
+    <script>
+        let db;
+
+        // Function to initialize IndexedDB
+        function initIndexedDB() {
+            let request = indexedDB.open("ObjectDatabase", 1);
+
+            // On upgrade needed (first time creation or version change)
+            request.onupgradeneeded = function(event) {
+                db = event.target.result;
+                let objectStore = db.createObjectStore("objects", { keyPath: "uuid" });
+            };
+
+            // On success (db initialized or opened successfully)
+            request.onsuccess = function(event) {
+                db = event.target.result;
+                console.log("IndexedDB initialized successfully");
+            };
+
+            // On error
+            request.onerror = function(event) {
+                console.error("Error initializing IndexedDB", event);
+            };
+        }
+
+        // Function to generate UUID
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                let r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Function to generate and store 1000 objects in IndexedDB
+        function storeObjects() {
+            let transaction = db.transaction(["objects"], "readwrite");
+            let objectStore = transaction.objectStore("objects");
+
+            // Generating 1000 objects
+            for (let i = 0; i < 1000; i++) {
+                let object = {
+                    uuid: generateUUID(),
+                    source_database: "IndexedDB",
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    name: "User" + i,       // Custom attribute 1: Name
+                    age: Math.floor(Math.random() * 60) + 18, // Custom attribute 2: Age
+                    city: "City" + (i % 100) // Custom attribute 3: City
+                };
+
+                objectStore.add(object); // Store each object in IndexedDB
+            }
+
+            transaction.oncomplete = function() {
+                console.log("All objects added successfully to IndexedDB");
+            };
+
+            transaction.onerror = function(event) {
+                console.error("Error storing objects", event);
+            };
+        }
+
+        // Initialize IndexedDB on page load
+        window.onload = function() {
+            initIndexedDB();
+        };
+    </script>
+</head>
+<body>
+    <h1>IndexedDB Object Storage</h1>
+    <button onclick="storeObjects()">Generate and Store 1000 Objects</button>
+    <p>Open your browser's Developer Tools and check the IndexedDB entries after clicking the button.</p>
+</body>
+</html>
