@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Generator</title>
+    <script>
+        // Open or create the IndexedDB database
+        let db;
+        let request = indexedDB.open("MyDatabase", 1);
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            // Create an object store with a keyPath of "uuid"
+            let objectStore = db.createObjectStore("objects", { keyPath: "uuid" });
+            objectStore.createIndex("created_at", "created_at", { unique: false });
+            objectStore.createIndex("updated_at", "updated_at", { unique: false });
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            console.log("IndexedDB database is ready.");
+            generateAndStoreObjects();
+        };
+
+        request.onerror = function(event) {
+            console.error("Error opening IndexedDB:", event.target.errorCode);
+        };
+
+        // Function to generate 1000 objects and store them in IndexedDB
+        function generateAndStoreObjects() {
+            let transaction = db.transaction(["objects"], "readwrite");
+            let objectStore = transaction.objectStore("objects");
+
+            for (let i = 0; i < 1000; i++) {
+                let object = {
+                    uuid: crypto.randomUUID(), // Unique UUID
+                    source: "IndexedDB", // Source identifier
+                    created_at: new Date(), // Creation timestamp
+                    updated_at: new Date(), // Update timestamp
+                    attribute1: `CustomAttr1_${i}`, // Custom attribute 1
+                    attribute2: `CustomAttr2_${i}`, // Custom attribute 2
+                    attribute3: `CustomAttr3_${i}`  // Custom attribute 3
+                };
+
+                let request = objectStore.add(object);
+                request.onsuccess = function(event) {
+                    console.log(`Object ${object.uuid} added successfully.`);
+                };
+                request.onerror = function(event) {
+                    console.error("Error adding object:", event.target.errorCode);
+                };
+            }
+
+            transaction.oncomplete = function() {
+                console.log("All objects have been stored in IndexedDB.");
+            };
+        }
+    </script>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <p>Open your browser's developer tools and check IndexedDB storage after generating objects.</p>
+</body>
+</html>
