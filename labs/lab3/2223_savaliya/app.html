@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Example</title>
+    <script>
+        // Function to create IndexedDB
+        function createDatabase() {
+            let request = indexedDB.open('TestDB', 1);
+
+            // Database creation and upgrade
+            request.onupgradeneeded = function(event) {
+                let db = event.target.result;
+
+                // Create object store if it doesn't exist
+                if (!db.objectStoreNames.contains('TestStore')) {
+                    let objectStore = db.createObjectStore('TestStore', { keyPath: 'uuid' });
+                }
+            };
+
+            // On success
+            request.onsuccess = function(event) {
+                let db = event.target.result;
+                generateAndStoreObjects(db);
+            };
+
+            // On error
+            request.onerror = function(event) {
+                console.error('Error opening IndexedDB:', event);
+            };
+        }
+
+        // Function to generate 1000 objects and store them in IndexedDB
+        function generateAndStoreObjects(db) {
+            let transaction = db.transaction(['TestStore'], 'readwrite');
+            let objectStore = transaction.objectStore('TestStore');
+
+            for (let i = 1; i <= 1000; i++) {
+                let uuid = crypto.randomUUID();
+                let now = new Date().toISOString();
+                let object = {
+                    uuid: uuid,
+                    sourceDB: "IndexedDB",
+                    createdAt: now,
+                    updatedAt: now,
+                    customAttr1: "Attribute1_" + i,
+                    customAttr2: "Attribute2_" + i,
+                    customAttr3: "Attribute3_" + i
+                };
+
+                let request = objectStore.add(object);
+
+                request.onsuccess = function() {
+                    console.log('Object added with UUID:', uuid);
+                };
+
+                request.onerror = function() {
+                    console.error('Error adding object:', request.error);
+                };
+            }
+
+            transaction.oncomplete = function() {
+                console.log('All objects have been added.');
+            };
+
+            transaction.onerror = function() {
+                console.error('Transaction error:', transaction.error);
+            };
+        }
+
+        // Load the database on page load
+        window.onload = function() {
+            createDatabase();
+        };
+    </script>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <p>Check the console for status updates.</p>
+</body>
+</html>
