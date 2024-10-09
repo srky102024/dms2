@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Generator</title>
+    <script src="app.js" defer></script> <!-- Link to the external JavaScript file -->
+</head>
+<body>
+    <h1>Generate and Store Objects in IndexedDB</h1>
+    <button onclick="generateAndStoreObjects()">Generate 1000 Objects</button>
+    <p id="status"></p>
+</body>
+</html>
