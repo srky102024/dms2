@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Example</title>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generate">Generate 1000 Objects</button>
+    <div id="status"></div>
+
+    <script>
+        const dbName = 'SampleDB';
+        const storeName = 'SampleStore';
+        let db;
+
+        // Open IndexedDB
+        const request = indexedDB.open(dbName, 1);
+        
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            const objectStore = db.createObjectStore(storeName, { keyPath: 'uuid' });
+            objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            document.getElementById('generate').addEventListener('click', generateObjects);
+        };
+
+        request.onerror = function(event) {
+            console.error("Database error: ", event.target.errorCode);
+        };
+
+        // Function to generate UUID
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Function to generate objects and store them in IndexedDB
+        function generateObjects() {
+            const transaction = db.transaction([storeName], 'readwrite');
+            const objectStore = transaction.objectStore(storeName);
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = 'Generating objects...';
+
+            for (let i = 0; i < 1000; i++) {
+                const object = {
+                    uuid: generateUUID(),
+                    source: 'IndexedDB',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    attribute1: Math.floor(Math.random() * 100),
+                    attribute2: Math.random().toFixed(2),
+                    attribute3: `Object ${i}`
+                };
+                objectStore.add(object);
+            }
+
+            transaction.oncomplete = function() {
+                statusDiv.innerHTML = '1000 objects generated and stored in IndexedDB!';
+            };
+            
+            transaction.onerror = function(event) {
+                console.error("Transaction error: ", event.target.errorCode);
+                statusDiv.innerHTML = 'Error generating objects.';
+            };
+        }
+    </script>
+</body>
+</html>
+
