@@ -1,0 +1,64 @@
+import uuid
+import pymongo
+from datetime import datetime
+import random
+
+# MongoDB connection URI
+uri = "mongodb+srv://i40:dbms2@cluster0.lixbqmp.mongodb.net/lab3"
+client = pymongo.MongoClient(uri)
+
+# Specify the database and collection name
+db = client['lab3']
+collection_name = "1553_Nikhil"  # Collection name using the last four digits of your student ID
+collection = db[collection_name]
+
+# Generate 1000 objects
+objects = []
+for _ in range(1000):
+    obj = {
+        "uuid": str(uuid.uuid4()),  # Generate a UUID
+        "source_db": "MongoDB",  # Source database identifier
+        "created_at": datetime.now(),  # Timestamp for creation
+        "updated_at": datetime.now(),  # Timestamp for update
+        "attribute1": random.randint(1, 100),  # Random integer for additional attribute 1
+        "attribute2": f"SampleText_{random.randint(1, 100)}",  # Random text for additional attribute 2
+        "attribute3": round(random.uniform(1.0, 100.0), 2)  # Random float for additional attribute 3
+    }
+    objects.append(obj)
+
+# Insert the objects into the MongoDB collection
+collection.insert_many(objects)
+
+print(f"Inserted {len(objects)} objects into the collection: {collection_name}")
+import uuid
+import pymongo
+from datetime import datetime
+import random
+
+# MongoDB connection URI
+uri = "mongodb+srv://i40:dbms2@cluster0.lixbqmp.mongodb.net/lab3"
+client = pymongo.MongoClient(uri)
+
+# Specify the database and collection name
+db = client['lab3']
+collection_name = "1553_objects_collection"  # Collection name using the last four digits of your student ID
+collection = db[collection_name]
+
+# Generate 1000 objects
+objects = []
+for _ in range(1000):
+    obj = {
+        "uuid": str(uuid.uuid4()),  # Generate a UUID
+        "source_db": "MongoDB",  # Source database identifier
+        "created_at": datetime.now(),  # Timestamp for creation
+        "updated_at": datetime.now(),  # Timestamp for update
+        "attribute1": random.randint(1, 100),  # Random integer for additional attribute 1
+        "attribute2": f"SampleText_{random.randint(1, 100)}",  # Random text for additional attribute 2
+        "attribute3": round(random.uniform(1.0, 100.0), 2)  # Random float for additional attribute 3
+    }
+    objects.append(obj)
+
+# Insert the objects into the MongoDB collection
+collection.insert_many(objects)
+
+print(f"Inserted {len(objects)} objects into the collection: {collection_name}")
