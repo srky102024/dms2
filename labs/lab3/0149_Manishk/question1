@@ -1,1 +1,28 @@
+import pymongo
+import uuid
+from datetime import datetime
+from pymongo import MongoClient
+
+# MongoDB connection setup
+client = MongoClient("mongodb+srv://i40:dbms2@cluster0.lixbqmp.mongodb.net/lab3")
+db = client['lab3']  # Database name is 'lab3'
+collection = db['0149_Manishk']  # Collection name based on your student ID
+
+# Function to create an object with specified attributes
+def create_object():
+    return {
+        "uuid": str(uuid.uuid4()),
+        "source": "MongoDB",
+        "created_at": datetime.now(),
+        "updated_at": datetime.now(),
+        "status": "active",  # Example attribute 1
+        "category": "general",  # Example attribute 2
+        "value": round(100 * uuid.uuid4().int % 1000 / 100, 2)  # Example attribute 3
+    }
+
+# Generate and store 1000 objects
+objects = [create_object() for _ in range(1000)]
+collection.insert_many(objects)
+
+print("1000 objects have been successfully inserted into the MongoDB collection '0167838_ms'.")
 
