@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IndexedDB Object Generator</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        margin-top: 20px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generate">Generate 1000 Objects</button>
+    <p id="status"></p>
+
+    <script>
+      const dbName = "skinCareObjectsDB";
+      const storeName = "skinCareObjects";
+      let db;
+
+      const request = indexedDB.open(dbName, 1);
+
+      request.onupgradeneeded = function (event) {
+        db = event.target.result;
+        const objectStore = db.createObjectStore(storeName, {
+          keyPath: "UUID",
+        });
+        objectStore.createIndex("source_db", "source_db", { unique: false });
+        objectStore.createIndex("createdAt", "createdAt", { unique: false });
+        objectStore.createIndex("updatedAt", "updatedAt", { unique: false });
+        objectStore.createIndex("brand", "brand", { unique: false });      
+        objectStore.createIndex("product", "product", { unique: false });     
+        objectStore.createIndex("rating", "rating", { unique: false });      
+      };
+
+      request.onsuccess = function (event) {
+        db = event.target.result;
+        document.getElementById("generate").onclick = generateObjects;
+      };
+
+      request.onerror = function (event) {
+        console.error("Database error:", event.target.errorCode);
+      };
+
+      function generateUUID() {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+          /[xy]/g,
+          function (c) {
+            const r = (Math.random() * 16) | 0;
+            const v = c === "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          }
+        );
+      }
+
+      function generateObjects() {
+        
+        const brands = [
+          "CeraVe", "Neutrogena", "La Roche-Posay", "The Ordinary", "Olay",
+          "L'Oréal", "Clinique", "Kiehl's", "Paula's Choice", "Aveeno",
+        ];
+
+        
+        const products = [
+          "Toner", "Face Mask", "Sunscreen", "Moisturizer", "Cleanser",
+          "Serum", "Eye Cream", "Exfoliator", "Face Oil", "Lip Balm",
+        ];
+
+        
+        const ratings = [1, 2, 3, 4, 5];
+
+        const objects = [];
+
+        for (let i = 0; i < 1000; i++) {
+          const obj = {
+            UUID: generateUUID(),
+            source_db: "IndexedDB",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            brand: brands[Math.floor(Math.random() * brands.length)], 
+            product: products[Math.floor(Math.random() * products.length)], 
+            rating: ratings[Math.floor(Math.random() * ratings.length)]     
+          };
+          objects.push(obj);
+        }
+
+        storeObjects(objects);
+        syncWithMongoDB(objects);
+      }
+
+      function storeObjects(objects) {
+        const transaction = db.transaction(storeName, "readwrite");
+        const objectStore = transaction.objectStore(storeName);
+
+        objects.forEach((obj) => {
+          objectStore.add(obj);
+        });
+
+        transaction.oncomplete = function () {
+          document.getElementById("status").innerText =
+            "Successfully inserted 1000 objects into IndexedDB.";
+        };
+
+        transaction.onerror = function (event) {
+          console.error("Transaction error:", event.target.error);
+        };
+      }
+
+      function syncWithMongoDB(data) {
+        fetch("http://localhost:3000/sync", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        })
+          .then((response) => {
+            console.log("Response Status:", response.status);
+            return response.text();
+          })
+          .then((text) => {
+            try {
+              const jsonData = JSON.parse(text);
+              console.log("Success:", jsonData);
+              document.getElementById("status").innerText +=
+                "\nData synced with MongoDB successfully.";
+            } catch (error) {
+              console.error("Parsing error:", error);
+              console.error("Response text was:", text);
+              document.getElementById("status").innerText +=
+                "\nError parsing response from server.";
+            }
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            document.getElementById("status").innerText +=
+              "\nError syncing with MongoDB.";
+          });
+      }
+    </script>
+  </body>
+</html>
