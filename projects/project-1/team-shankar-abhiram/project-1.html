@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List with IndexedDB</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #performanceResults { margin-top: 20px; }
+    </style>
+    <script>
+        let db; // To store the database reference
+
+        // Function to setup IndexedDB and create the TodoList object store
+        function setupIndexedDB(dbName, callback) {
+            let request = indexedDB.open(dbName, 2); // Incremented version number
+
+            request.onupgradeneeded = function (event) {
+                db = event.target.result;
+
+                // Create the TodoList object store and index if they don't exist
+                if (!db.objectStoreNames.contains("TodoList")) {
+                    db.createObjectStore("TodoList", { keyPath: "id" }).createIndex("status", "status", { unique: false });
+                }
+
+                // Create the TodoListCompleted object store
+                if (!db.objectStoreNames.contains("TodoListCompleted")) {
+                    db.createObjectStore("TodoListCompleted", { keyPath: "id" });
+                }
+            };
+
+            request.onsuccess = function (event) {
+                db = event.target.result;
+                callback();
+            };
+
+            request.onerror = function (event) {
+                console.error("Error opening IndexedDB:", event);
+            };
+        }
+
+        // Function to add 100,000 tasks
+        function add100kObjects(callback) {
+            let transaction = db.transaction("TodoList", "readwrite");
+            let objectStore = transaction.objectStore("TodoList");
+            
+            for (let i = 0; i < 100000; i++) {
+                let dueDate = new Date();
+                dueDate.setDate(dueDate.getDate() + Math.floor(Math.random() * 30)); // Random due date
+                let status = (i < 1000) ? "completed" : "in progress"; // 1,000 completed
+                let object = { id: i, task: `Task_${i + 1}`, status: status, dueDate: dueDate.toISOString().split('T')[0] };
+                objectStore.add(object);
+            }
+
+            transaction.oncomplete = function () {
+                console.log("100k tasks added to TodoList.");
+                callback();
+            };
+
+            transaction.onerror = function (event) {
+                console.error("Error adding tasks:", event);
+            };
+        }
+
+        // Function to read completed tasks
+        function readCompletedTasks(callback) {
+            let start = performance.now();
+            let transaction = db.transaction("TodoList", "readonly");
+            let objectStore = transaction.objectStore("TodoList");
+            let completedTasksCount = 0;
+
+            let request = objectStore.index("status").openCursor(IDBKeyRange.only("completed"));
+            request.onsuccess = function (event) {
+                let cursor = event.target.result;
+                if (cursor) {
+                    completedTasksCount++;
+                    cursor.continue();
+                } else {
+                    let end = performance.now();
+                    console.log(`Completed Tasks: ${completedTasksCount}, Time Taken: ${(end - start).toFixed(2)} ms`);
+                    callback();
+                }
+            };
+        }
+
+        // Function to read completed tasks with read-only flag
+        function readCompletedTasksReadonly(callback) {
+            let start = performance.now();
+            let transaction = db.transaction("TodoList", "readonly");
+            let objectStore = transaction.objectStore("TodoList");
+            let completedTasksCount = 0;
+
+            let request = objectStore.index("status").openCursor(IDBKeyRange.only("completed"));
+            request.onsuccess = function (event) {
+                let cursor = event.target.result;
+                if (cursor) {
+                    completedTasksCount++;
+                    cursor.continue();
+                } else {
+                    let end = performance.now();
+                    console.log(`Completed Tasks (Readonly): ${completedTasksCount}, Time Taken: ${(end - start).toFixed(2)} ms`);
+                    callback();
+                }
+            };
+        }
+
+        // Function to copy completed tasks to TodoListCompleted and measure time
+        function copyCompletedTasks(callback) {
+            let transaction = db.transaction("TodoList", "readonly");
+            let objectStore = transaction.objectStore("TodoList");
+            let request = objectStore.index("status").openCursor(IDBKeyRange.only("completed"));
+
+            let completedTasks = [];
+            let start = performance.now(); // Start timing the operation
+
+            request.onsuccess = function (event) {
+                let cursor = event.target.result;
+                if (cursor) {
+                    completedTasks.push(cursor.value);
+                    cursor.continue();
+                } else {
+                    // Now add completed tasks to the new store
+                    let writeTransaction = db.transaction("TodoListCompleted", "readwrite");
+                    let writeObjectStore = writeTransaction.objectStore("TodoListCompleted");
+
+                    for (let task of completedTasks) {
+                        writeObjectStore.add(task);
+                    }
+
+                    writeTransaction.oncomplete = function () {
+                        let end = performance.now(); // End timing the operation
+                        console.log(`Completed tasks copied to TodoListCompleted: ${completedTasks.length}`);
+                        console.log(`Time Taken: ${(end - start).toFixed(2)} ms`); // Display time taken
+                        callback();
+                    };
+
+                    writeTransaction.onerror = function (event) {
+                        console.error("Error copying completed tasks:", event);
+                    };
+                }
+            };
+        }
+
+        // Function to run tasks with a delay for screenshots
+        function runTasks() {
+            setupIndexedDB("TodoDB", function() {
+                setTimeout(() => {
+                    add100kObjects(function() {
+                        setTimeout(() => {
+                            readCompletedTasks(function() {
+                                setTimeout(() => {
+                                    readCompletedTasksReadonly(function() {
+                                        setTimeout(() => {
+                                            copyCompletedTasks(function() {
+                                                console.log("All tasks completed successfully.");
+                                            });
+                                        }, 3000); // Wait 3 seconds before finishing
+                                    });
+                                }, 3000); // Wait 3 seconds after reading completed tasks
+                            });
+                        }, 3000); // Wait 3 seconds after adding tasks
+                    });
+                }, 3000); // Wait 3 seconds after DB setup
+            });
+        }
+
+        // Run the tasks when the page loads
+        window.onload = runTasks;
+    </script>
+</head>
+<body>
+    <h1>Todo List Performance with IndexedDB</h1>
+    <div id="performanceResults"></div>
+</body>
+</html>
