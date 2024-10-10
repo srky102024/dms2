@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.0.3/dexie.min.js"></script>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button onclick="generateObjects()">Generate and Sync 1000 Objects</button>
+
+    <script>
+        // Initialize IndexedDB using Dexie
+        const db = new Dexie("Lab3Database");
+        db.version(1).stores({
+            objects: "uuid, source_db, created_at, updated_at, attribute_1, attribute_2, attribute_3"
+        });
+
+        async function generateObjects() {
+            let objects = [];
+            for (let i = 0; i < 1000; i++) {
+                let obj = {
+                    uuid: crypto.randomUUID(),
+                    source_db: "IndexedDB",
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    attribute_1: Math.floor(Math.random() * 100) + 1,
+                    attribute_2: ['A', 'B', 'C'][Math.floor(Math.random() * 3)],
+                    attribute_3: Math.random()
+                };
+                objects.push(obj);
+            }
+            
+            // Store objects in IndexedDB
+            await db.objects.bulkAdd(objects);
+            console.log("Successfully added 1000 objects to IndexedDB.");
+            
+            // Export IndexedDB Data
+            exportData(objects);
+        }
+
+        function exportData(objects) {
+            const dataStr = JSON.stringify(objects);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "indexeddb_data.json";
+            a.click();
+
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
