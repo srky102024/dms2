@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IndexedDB TodoList Example with Visualization</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Include Chart.js library -->
+</head>
+<body>
+  <h2>Performance Visualization of IndexedDB Operations</h2>
+  <canvas id="performanceChart" width="800" height="400"></canvas> <!-- Canvas for the chart -->
+  <script>
+    let db;
+
+    // Step 1: Setup IndexedDB without recreating it on rerun
+    function setupIndexedDB(dbName, storeName, callback) {
+        let request = indexedDB.open(dbName, 3);
+
+        request.onupgradeneeded = function (event) {
+            let db = event.target.result;
+
+            // Create object store and index if they don't already exist
+            if (!db.objectStoreNames.contains(storeName)) {
+                let objectStore = db.createObjectStore(storeName, { keyPath: "id", autoIncrement: true });
+                objectStore.createIndex("status", "status", { unique: false });
+            } else {
+                let objectStore = event.target.transaction.objectStore(storeName);
+                if (!objectStore.indexNames.contains("status")) {
+                    objectStore.createIndex("status", "status", { unique: false });
+                }
+            }
+
+            // Create TodoListCompleted object store if it doesn't already exist
+            if (!db.objectStoreNames.contains("TodoListCompleted")) {
+                db.createObjectStore("TodoListCompleted", { keyPath: "id", autoIncrement: true });
+            }
+        };
+
+        request.onsuccess = function (event) {
+            db = event.target.result;
+            callback(db);
+        };
+
+        request.onerror = function (event) {
+            console.error("Error opening IndexedDB:", event);
+        };
+    }
+
+    // Step 2: Populate "TodoList" store with 100,000 randomly generated objects
+    function add100kTasks(db, storeName, callback) {
+        let transaction = db.transaction(storeName, "readonly");
+        let objectStore = transaction.objectStore(storeName);
+        let countRequest = objectStore.count();
+
+        countRequest.onsuccess = function () {
+            if (countRequest.result === 0) {
+                let writeTransaction = db.transaction(storeName, "readwrite");
+                let writeObjectStore = writeTransaction.objectStore(storeName);
+
+                for (let i = 1; i <= 100000; i++) {
+                    let task = {
+                        id: i,
+                        task: `Task ${i}`,
+                        status: i <= 1000 ? "completed" : "in progress",
+                        dueDate: `2024-09-${(i % 30) + 1}`
+                    };
+                    writeObjectStore.add(task);
+                }
+
+                writeTransaction.oncomplete = function () {
+                    console.log("100,000 tasks added.");
+                    callback();
+                };
+
+                writeTransaction.onerror = function (event) {
+                    console.error("Error adding tasks:", event);
+                };
+            } else {
+                console.log("Tasks already exist, skipping insertion.");
+                callback();
+            }
+        };
+
+        countRequest.onerror = function (event) {
+            console.error("Error counting tasks:", event);
+        };
+    }
+
+    // Step 3a: Measure time to read completed tasks without using index
+    function readCompletedTasksWithoutIndex(db, storeName, callback) {
+        let startTime = performance.now();
+        let transaction = db.transaction(storeName, "readonly");
+        let objectStore = transaction.objectStore(storeName);
+
+        let completedTasks = [];
+        let request = objectStore.openCursor(); // Open cursor without using an index
+        request.onsuccess = function (event) {
+            let cursor = event.target.result;
+            if (cursor) {
+                if (cursor.value.status === "completed") {
+                    completedTasks.push(cursor.value);
+                }
+                cursor.continue();
+            } else {
+                let endTime = performance.now();
+                console.log(`Time to read completed tasks without using index: ${(endTime - startTime).toFixed(2)} ms`);
+                callback(completedTasks, endTime - startTime);
+            }
+        };
+
+        request.onerror = function (event) {
+            console.error("Error reading tasks without index:", event);
+        };
+    }
+
+    // Step 3b: Measure time to read all tasks with status "completed" using the index
+    function readCompletedTasksUsingIndex(db, storeName, callback) {
+        let startTime = performance.now();
+        let transaction = db.transaction(storeName, "readonly");
+        let objectStore = transaction.objectStore(storeName);
+        let statusIndex = objectStore.index("status");
+
+        let completedTasks = [];
+        let request = statusIndex.openCursor(IDBKeyRange.only("completed")); // Using index to query "completed" tasks
+        request.onsuccess = function (event) {
+            let cursor = event.target.result;
+            if (cursor) {
+                completedTasks.push(cursor.value);
+                cursor.continue();
+            } else {
+                let endTime = performance.now();
+                console.log(`Time to read completed tasks using index: ${(endTime - startTime).toFixed(2)} ms`);
+                callback(completedTasks, endTime - startTime);
+            }
+        };
+
+        request.onerror = function (event) {
+            console.error("Error reading tasks using index:", event);
+        };
+    }
+
+    // Step 3c: Copy completed tasks to "TodoListCompleted" using put()
+    function copyCompletedTasksToNewStore(db, storeName, callback) {
+        readCompletedTasksUsingIndex(db, storeName, function (completedTasks, readTime) {
+            let startTime = performance.now();
+            let transaction = db.transaction("TodoListCompleted", "readwrite");
+            let completedStore = transaction.objectStore("TodoListCompleted");
+
+            completedTasks.forEach(task => {
+                completedStore.put(task);  // Use `put()` to add or overwrite tasks
+            });
+
+            transaction.oncomplete = function () {
+                let endTime = performance.now();
+                console.log(`Time to copy completed tasks: ${(endTime - startTime).toFixed(2)} ms`);
+                callback(endTime - startTime);
+            };
+
+            transaction.onerror = function (event) {
+                console.error("Error copying tasks:", event);
+            };
+        });
+    }
+
+    // Function to visualize the performance results
+    function visualizePerformance(results) {
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        const labels = results.map(result => result.Operation);
+        const data = results.map(result => result.TimeTakenMs);
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Time Taken (ms)',
+                    data: data,
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Time in milliseconds (ms)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Operations'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        });
+    }
+
+    // Step 4: Measure and display all performance results
+    function measurePerformance() {
+        const dbName = "TodoDB";
+        const storeName = "TodoList";
+        const results = [];
+
+        setupIndexedDB(dbName, storeName, function (db) {
+            add100kTasks(db, storeName, function () {
+                
+                // Measure time to read completed tasks without using the index
+                readCompletedTasksWithoutIndex(db, storeName, function (completedTasks, readTime) {
+                    results.push({
+                        Operation: "Read completed tasks without using index",
+                        TimeTakenMs: readTime.toFixed(2)
+                    });
+
+                    // Measure time to read completed tasks using the index
+                    readCompletedTasksUsingIndex(db, storeName, function (completedTasks, readTime) {
+                        results.push({
+                            Operation: "Read completed tasks using status index",
+                            TimeTakenMs: readTime.toFixed(2)
+                        });
+
+                        // Copy completed tasks to TodoListCompleted
+                        copyCompletedTasksToNewStore(db, storeName, function (copyTime) {
+                            results.push({
+                                Operation: "Copy completed tasks to TodoListCompleted",
+                                TimeTakenMs: copyTime.toFixed(2)
+                            });
+
+                            // Read completed tasks from TodoListCompleted
+                            let startTime = performance.now();
+                            let transaction = db.transaction("TodoListCompleted", "readonly");
+                            let completedStore = transaction.objectStore("TodoListCompleted");
+                            let completedTasks = [];
+                            completedStore.openCursor().onsuccess = function (event) {
+                                let cursor = event.target.result;
+                                if (cursor) {
+                                    completedTasks.push(cursor.value);
+                                    cursor.continue();
+                                } else {
+                                    let endTime = performance.now();
+                                    results.push({
+                                        Operation: "Read completed tasks from TodoListCompleted",
+                                        TimeTakenMs: (endTime - startTime).toFixed(2)
+                                    });
+
+                                    // Display the results in table format and visualize them
+                                    console.table(results);
+                                    visualizePerformance(results);
+                                }
+                            };
+                        });
+                    });
+                });
+            });
+        });
+    }
+
+    // Call the function to measure and display performance
+    measurePerformance();
+
+  </script>
+</body>
+</html>
