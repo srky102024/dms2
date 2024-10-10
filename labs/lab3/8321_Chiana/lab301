@@ -1,0 +1,43 @@
+
+# imports
+from pymongo import MongoClient
+import uuid
+import datetime
+import random
+
+# connect to mongo
+uri = "mongodb+srv://i40:dbms2@cluster0.lixbqmp.mongodb.net/lab3"
+client = MongoClient(uri)
+db = client['lab3']
+
+# specific collection
+collection_name = "8321_Chiana"
+collection = db[collection_name]
+
+# array to import into mongo
+object_array = []
+
+# create 1,000 objects
+for _ in range(1000):
+    object = {
+        'uuid': str(uuid.uuid4()),
+        'source_db': 'MongoDB',
+        'dateCreated': datetime.datetime.now(datetime.timezone.utc),
+        'dateUpdated': datetime.datetime.now(datetime.timezone.utc), # also now
+        'student': "Chiana",
+        'age': 48,
+        'bloodSugarPerc': round(random.uniform(00.0, 100.0), 2)
+    }
+    object_array.append(object)
+
+print(object_array[:3])
+# insert into collection
+collection.insert_many(object_array)
+
+
+
+
+
+
+
+

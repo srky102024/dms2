@@ -1,0 +1,99 @@
+<html>
+    <head>
+
+    </head>
+    <body>
+        <h1>
+            Lab3 Objects
+        </h1>
+        <script>
+
+
+
+
+const dbName = "indDB";
+const storeName = "indObjStore";
+
+let db;
+
+const request = indexedDB.open(dbName, 1);
+
+request.onupgradeneeded = (event) => {
+    db = event.target.result;
+    const objectStore = db.createObjectStore(storeName, { keyPath: 'uuid' });
+    //indObjStore.createIndex("status", "status");
+};
+
+request.onsuccess = (event) => {
+    db = event.target.result;
+    console.log("DB created");
+    addObjects();
+};
+
+request.onerror = (event) => {
+    console.error("Database error: ", event.target.errorCode);
+};
+
+function addObjects() {
+
+    console.log("Adding objects...");
+
+    function createObject() {
+        return {
+            uuid: crypto.randomUUID(),
+            source_db: "IndexedDB",
+            dateCreated: new Date().toISOString(),
+            dateUpdated: new Date().toISOString(),
+            student: "Chiana",
+            age: "101",
+            bloodSugarPec: 0.4
+        };
+    }
+
+    
+    function storeObject(currentObject) {
+        const transaction = db.transaction([storeName], "readwrite");
+        const objectStore = transaction.objectStore(storeName);
+        objectStore.add(currentObject);
+        transaction.onerror = function(event) {
+            console.error("Transaction error: " + event.target.errorCode);
+        };
+    }
+
+    
+    function generateAndStoreObjects() {
+        const totalObjects = 1000;
+        for (let i = 0; i < totalObjects; i++) {
+            const currentObject = createObject();
+            console.log(currentObject);
+            storeObject(currentObject);
+        }
+
+        const transaction = db.transaction([storeName], "readwrite");
+
+        transaction.oncomplete = () => {
+            console.log("Database populated");
+        };
+
+        transaction.onerror = (event) => {
+            console.error("Transaction error during population: " + event.target.errorCode);
+
+        };
+    }
+
+
+    generateAndStoreObjects();
+
+}
+
+
+
+
+
+
+
+
+
+       </script>
+    </body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sync Data</title>
+</head>
+
+<body>
+    <h1>Sync Data</h1>
+
+    <button onclick="getData()">Fetch MongoDB Data</button>
+    <button onclick="postData()">Post 1000 MongoDB Objects</button>
+    
+    <div id="output"></div>
+</body>
+
+<script>
+    // Fetch and display 1000 MongoDB objects
+    async function getData() {
+        const url = "http://localhost:5000/mongodb";
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log(data);
+            alert(`Fetched ${data.length} records from MongoDB`);
+            document.getElementById("output").innerText = JSON.stringify(data, null, 2);
+        } catch (error) {
+            console.error('Error:', error.message);
+        }
+    }
+
+    // Post 1000 objects to MongoDB
+    async function postData() {
+        const url = "http://localhost:5000/mongodb/post";
+        const data = new Array(1000).fill().map((_, i) => ({
+            uuid: i, source: "mongodb", creationTimestamp: Date.now(), updatedTimestamp: Date.now(), A: "A", B: "B", C: "C"
+        }));
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            const responseData = await response.json();
+            console.log(responseData);
+            alert(`Successfully posted 1000 objects!`);
+        } catch (error) {
+            console.error('Error:', error.message);
+        }
+    }
+</script>
+
+</html>
