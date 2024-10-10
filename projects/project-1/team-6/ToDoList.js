@@ -269,7 +269,7 @@ function measurePerformance() {
                     displayDataRead(db, storeName, function (db) {
                         let endReadCompleted = performance.now();
                         performanceResults.push({
-                            Operation: "Display completed tasks (readonly)",
+                            Operation: "Read completed tasks (readonly)",
                             TimeTakenMs: (endReadCompleted - startReadCompleted).toFixed(2),
                         });
 
@@ -297,7 +297,7 @@ function measurePerformance() {
                                 displayData(db, targetStoreName, function (db) {
                                     let endReadAllCopied = performance.now();
                                     performanceResults.push({
-                                        Operation: "Read 100k objects from copied store",
+                                        Operation: "Read 1000 objects from copied store",
                                         TimeTakenMs: (endReadAllCopied - startReadAllCopied).toFixed(2)
                                     });
     
@@ -307,7 +307,7 @@ function measurePerformance() {
                                     displayDataRead(db, targetStoreName, function (db) {
                                         let endReadCompletedCopied = performance.now();
                                         performanceResults.push({
-                                            Operation: "Display completed tasks (readonly, copied store)",
+                                            Operation: "Read completed tasks (readonly, copied store)",
                                             TimeTakenMs: (endReadCompletedCopied - startReadCompletedCopied).toFixed(2),
                                         });
     
