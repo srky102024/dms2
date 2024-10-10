@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Generator</title>
+</head>
+<body>
+    <h1>Generate 1000 Objects and Store in IndexedDB</h1>
+    <button id="generateBtn">Generate and Store Objects</button>
+    <p id="status"></p>
+
+    <script>
+        // Open IndexedDB
+        const dbName = "ObjectDatabase";
+        const dbVersion = 1;
+        let db;
+
+        // Open (or create) the database
+        const request = indexedDB.open(dbName, dbVersion);
+
+        request.onerror = function(event) {
+            console.error("Database error: ", event.target.errorCode);
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            console.log("Database opened successfully");
+        };
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            const objectStore = db.createObjectStore("objects", { keyPath: "uuid" });
+            console.log("Object store created.");
+        };
+
+        // Generate UUID function
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Function to create an object
+        function createObject() {
+            const now = new Date();
+            return {
+                uuid: generateUUID(),
+                source_db: "IndexedDB",
+                created_at: now.toISOString(),
+                updated_at: now.toISOString(),
+                attribute1: "Sample data 1",
+                attribute2: "Sample data 2",
+                attribute3: "Sample data 3"
+            };
+        }
+
+        // Store objects in IndexedDB
+        function storeObjects(objects) {
+            const transaction = db.transaction(["objects"], "readwrite");
+            const objectStore = transaction.objectStore("objects");
+
+            objects.forEach(object => {
+                const request = objectStore.add(object);
+                request.onerror = function(event) {
+                    console.error("Error storing object: ", event.target.errorCode);
+                };
+                request.onsuccess = function() {
+                    console.log("Object added successfully: ", object.uuid);
+                };
+            });
+
+            transaction.oncomplete = function() {
+                document.getElementById("status").textContent = "All objects stored successfully.";
+            };
+        }
+
+        // Generate 1000 objects and store them
+        document.getElementById("generateBtn").addEventListener("click", function() {
+            const objects = [];
+            for (let i = 0; i < 1000; i++) {
+                objects.push(createObject());
+            }
+            storeObjects(objects);
+        });
+    </script>
+</body>
+</html>
