@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB</title>
+    <script>
+        
+
+        async function storeObjects() {
+            const dbRequest = indexedDB.open('lab3', 1);
+            
+            dbRequest.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                const objectStore = db.createObjectStore('9744Operations', { keyPath: 'uuid' });
+                objectStore.createIndex('source', 'source', { unique: false });
+				objectStore.createIndex('task_number', 'task_number', { unique: false });
+                objectStore.createIndex('status','status', { unique: false });
+                objectStore.createIndex('computing_cost','computing_cost', { unique: false });
+            };
+
+            dbRequest.onsuccess = (event) => {
+                const db = event.target.result;
+                const transaction = db.transaction(['9744Operations'], 'readwrite');
+                const objectStore = transaction.objectStore('9744Operations');
+
+                // Generate and store 1000 objects
+                for (let i = 0; i < 1000; i++) {
+                    const object = {
+                        uuid: crypto.randomUUID(),
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                        source: `IndexDB`,
+                        task_number: `task${i + 1}`, 
+                        computing_cost: Math.floor(Math.random() * 100) + 1, 
+						status: Math.random() < 0.5 ? 'processing' : 'done'
+                    };
+                    objectStore.add(object);
+                }
+
+                transaction.oncomplete = () => {
+                    console.log('All objects stored successfully!');
+                    alert('Stored 1000 objects in IndexedDB!');
+                };
+
+                transaction.onerror = (event) => {
+                    console.error('Transaction failed: ', event.target.error);
+                };
+            };
+
+            dbRequest.onerror = (event) => {
+                console.error('Database error: ', event.target.error);
+            };
+        }
+    </script>
+</head>
+<body>
+    <h1>IndexedDB</h1>
+    <button onclick="storeObjects()">Generate and Store 1000 Objects</button>
+</body>
+</html>
