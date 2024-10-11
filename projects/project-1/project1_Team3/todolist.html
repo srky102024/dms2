@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>IndexedDB Todo List</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background-color: #f4f4f4;
+      }
+      #output {
+        margin-top: 20px;
+        white-space: pre-wrap;
+        background: #fff;
+        padding: 10px;
+        border: 1px solid #ccc;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>IndexedDB: Todo List Project</h1>
+
+    <div id="output"></div>
+
+    <script>
+      let db;
+      const dbName = "TodoListDB";
+      const completedStoreName = "TodoListCompleted";
+
+      const request = indexedDB.open(dbName, 2);
+
+      request.onupgradeneeded = function (event) {
+        db = event.target.result;
+
+        if (!db.objectStoreNames.contains("TodoList")) {
+          const todoListStore = db.createObjectStore("TodoList", {
+            keyPath: "id",
+            autoIncrement: true,
+          });
+          todoListStore.createIndex("task", "task", { unique: false });
+          todoListStore.createIndex("status", "status", { unique: false });
+          todoListStore.createIndex("dueDate", "dueDate", { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains(completedStoreName)) {
+          db.createObjectStore(completedStoreName, {
+            keyPath: "id",
+            autoIncrement: true,
+          });
+        }
+      };
+
+      request.onsuccess = function (event) {
+        db = event.target.result;
+        updateOutput("Database opened successfully!");
+        runAllTasks();
+      };
+
+      request.onerror = function (event) {
+        updateOutput("Error opening database: " + event.target.errorCode);
+      };
+
+      function updateOutput(message) {
+        const outputDiv = document.getElementById("output");
+        outputDiv.innerHTML += message + "\n";
+      }
+
+      function runAllTasks() {
+        checkIfDatabaseIsEmpty(() => {
+          updateTasksStatus(() => {
+            measureReadCompletedTasks(() => {
+              measureReadOnlyTasks(() => {
+                measureIndexedTasks(() => {
+                  checkIfCompletedDataMoved(() => {
+                    measureCompletedStore();
+                  });
+                });
+              });
+            });
+          });
+        });
+      }
+
+      function checkIfDatabaseIsEmpty(callback) {
+        const transaction = db.transaction(["TodoList"], "readonly");
+        const todoListStore = transaction.objectStore("TodoList");
+        const request = todoListStore.count();
+
+        request.onsuccess = function (event) {
+          const count = event.target.result;
+          if (count === 0) {
+            populateDatabase(callback);
+          } else {
+            updateOutput("Database is already populated with tasks.");
+            callback();
+          }
+        };
+
+        request.onerror = function (event) {
+          updateOutput("Error checking database: " + event.target.errorCode);
+        };
+      }
+
+      function populateDatabase(callback) {
+        const transaction = db.transaction(["TodoList"], "readwrite");
+        const todoListStore = transaction.objectStore("TodoList");
+
+        for (let i = 1; i <= 100000; i++) {
+          const randomTask = generateRandomTask(i);
+          todoListStore.add(randomTask);
+        }
+
+        transaction.oncomplete = function () {
+          updateOutput("100,000 tasks have been generated successfully!");
+          callback();
+        };
+
+        transaction.onerror = function (event) {
+          updateOutput("Transaction error: " + event.target.errorCode);
+        };
+      }
+
+      function generateRandomTask(id) {
+        const tasks = [
+          "Finish the monthly report",
+          "Update website content",
+          "Prepare for client presentation",
+          "Review team feedback",
+          "Organize office meeting",
+          "Call the supplier",
+        ];
+        const statuses = ["pending", "in progress", "completed"];
+        const dueDate = generateRandomDate();
+
+        return {
+          id: id,
+          task: tasks[Math.floor(Math.random() * tasks.length)],
+          status: statuses[Math.floor(Math.random() * statuses.length)],
+          dueDate: dueDate,
+        };
+      }
+
+      function generateRandomDate() {
+        const start = new Date(2024, 0, 1);
+        const end = new Date(2024, 11, 31);
+        const randomDate = new Date(
+          start.getTime() + Math.random() * (end.getTime() - start.getTime())
+        );
+        return randomDate.toISOString().split("T")[0];
+      }
+
+      //Task 1
+      function updateTasksStatus(callback) {
+        const transaction = db.transaction(["TodoList"], "readwrite");
+        const todoListStore = transaction.objectStore("TodoList");
+        const request = todoListStore.getAll();
+
+        request.onsuccess = function (event) {
+          const tasks = event.target.result;
+
+          for (let i = 0; i < 1000 && i < tasks.length; i++) {
+            tasks[i].status = "completed";
+            todoListStore.put(tasks[i]);
+          }
+
+          for (let i = 1000; i < tasks.length; i++) {
+            tasks[i].status = "in progress";
+            todoListStore.put(tasks[i]);
+          }
+
+          updateOutput(
+            '1000 tasks updated to "completed" and the rest to "in progress".'
+          );
+          callback();
+        };
+
+        request.onerror = function (event) {
+          updateOutput("Error fetching tasks: " + event.target.errorCode);
+        };
+      }
+
+      //Task 2
+      function measureReadCompletedTasks(callback) {
+        const transaction = db.transaction(["TodoList"]);
+        const todoListStore = transaction.objectStore("TodoList");
+        const index = todoListStore.index("status");
+
+        const startTime = performance.now();
+
+        const request = index.getAll("completed");
+
+        request.onsuccess = function (event) {
+          const completedTasks = event.target.result;
+          const endTime = performance.now();
+
+          updateOutput(
+            `Time taken to read completed tasks: ${(
+              endTime - startTime
+            ).toFixed(2)} milliseconds`
+          );
+          callback();
+        };
+
+        request.onerror = function (event) {
+          updateOutput(
+            "Error fetching completed tasks: " + event.target.errorCode
+          );
+        };
+      }
+
+      // Task 3
+      function measureReadOnlyTasks(callback) {
+        const transaction = db.transaction(["TodoList"], "readonly");
+        const todoListStore = transaction.objectStore("TodoList");
+        const index = todoListStore.index("status");
+
+        const startTime = performance.now();
+        const request = index.getAll("completed");
+
+        request.onsuccess = function (event) {
+          const completedTasks = event.target.result;
+          const endTime = performance.now();
+
+          updateOutput(
+            `Time taken to read completed tasks (Read-Only): ${(
+              endTime - startTime
+            ).toFixed(2)} milliseconds`
+          );
+          callback();
+        };
+
+        request.onerror = function (event) {
+          updateOutput(
+            "Error fetching completed tasks (Read-Only): " +
+              event.target.errorCode
+          );
+        };
+      }
+
+      // Task 4
+      function measureIndexedTasks(callback) {
+        const transaction = db.transaction(["TodoList"], "readonly");
+        const todoListStore = transaction.objectStore("TodoList");
+        const statusIndex = todoListStore.index("status");
+
+        let completedTasks = [];
+        const startTime = performance.now();
+
+        let request = statusIndex.openCursor(IDBKeyRange.only("completed"));
+        request.onsuccess = function (event) {
+          let cursor = event.target.result;
+          if (cursor) {
+            completedTasks.push(cursor.value);
+            cursor.continue();
+          } else {
+            let endTime = performance.now();
+            updateOutput(
+              `Time to read completed tasks using index: ${(
+                endTime - startTime
+              ).toFixed(2)} milliseconds`
+            );
+            callback();
+          }
+        };
+
+        request.onerror = function (event) {
+          updateOutput(
+            "Error reading tasks using index: " + event.target.errorCode
+          );
+        };
+      }
+
+      // Task 5
+      function checkIfCompletedDataMoved(callback) {
+        const transaction = db.transaction([completedStoreName], "readonly");
+        const completedStore = transaction.objectStore(completedStoreName);
+        const request = completedStore.count();
+
+        request.onsuccess = function (event) {
+          const count = event.target.result;
+          if (count > 0) {
+            updateOutput(
+              "'TodoListCompleted' already contains data. Skipping transfer."
+            );
+            callback();
+          } else {
+            moveCompletedTasks(callback);
+          }
+        };
+
+        request.onerror = function (event) {
+          updateOutput(
+            "Error checking completed store: " + event.target.errorCode
+          );
+        };
+      }
+
+      function moveCompletedTasks(callback) {
+        const transaction = db.transaction(
+          ["TodoList", completedStoreName],
+          "readwrite"
+        );
+        const todoListStore = transaction.objectStore("TodoList");
+        const completedStore = transaction.objectStore(completedStoreName);
+        const index = todoListStore.index("status");
+
+        let request = index.openCursor(IDBKeyRange.only("completed"));
+
+        request.onsuccess = function (event) {
+          const cursor = event.target.result;
+          if (cursor) {
+            completedStore.add(cursor.value);
+            cursor.continue();
+          } else {
+            updateOutput(
+              "Completed tasks have been moved to the 'TodoListCompleted' store."
+            );
+            callback();
+          }
+        };
+
+        request.onerror = function (event) {
+          updateOutput("Error moving tasks: " + event.target.errorCode);
+        };
+      }
+
+      function measureCompletedStore() {
+        const transaction = db.transaction([completedStoreName], "readonly");
+        const completedStore = transaction.objectStore(completedStoreName);
+
+        const startTime = performance.now();
+
+        const request = completedStore.getAll();
+
+        request.onsuccess = function (event) {
+          const completedTasks = event.target.result;
+          const endTime = performance.now();
+
+          updateOutput(
+            `Time taken to read from 'TodoListCompleted': ${(
+              endTime - startTime
+            ).toFixed(2)} milliseconds.`
+          );
+        };
+
+        request.onerror = function (event) {
+          updateOutput(
+            "Error reading completed store: " + event.target.errorCode
+          );
+        };
+      }
+      // Task 6: For task 1 we had to update the status of the first 1000 items to completed, we traversed through the objects until
+      // we reached to the 1000th object and changed it to "completed" then did the same from the 1000th index and traversed till the end
+      // and changed the status to "in progress". We found this task pretty easy as we had the idea of how to approach this task and
+      // did it quickly without any obstacles.
+      // For task 2 we had to read the task which had the status "completed" without the readonly explicitly mentioned,
+      // we had we took time before and after completion with performance.now() and used it to find the amount of time it took to do it.
+      // For task 3 we did the same as task 2 with one change that was explicitly mentioning for it to be "readonly" flag.
+      // For task 4 we used an index on "status" attribute to have better query performance we used openCursor() to iterate
+      // through all the "completed" status tasks.
+      // For task 5 we already created a separate DB TodoListCompleted, for this we first checked if the db has already been created or not.
+      // If it has not been created only then a new db is created. After that check, we copied the data using the put() function.
+      // We got a bit stuck in this task but then we all researched together to make it work and we did it.
+      // After that we measured the time for reading it through a similar approach we did for other reading functions.
+    </script>
+  </body>
+</html>
