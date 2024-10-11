@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IndexedDB TodoList From Task 1 to 5</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f4f8;
+      color: #333;
+      padding: 20px;
+      text-align: center;
+    }
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .button {
+      margin: 10px;
+      padding: 10px 20px;
+      width: 300px; /* Ensures all buttons are of the same width */
+      border: none;
+      border-radius: 5px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .task1 { background-color: #4CAF50; }
+    .task1:hover { background-color: #45a049; }
+    .task2 { background-color: #2196F3; }
+    .task2:hover { background-color: #1E88E5; }
+    .task3 { background-color: #FF9800; }
+    .task3:hover { background-color: #FB8C00; }
+    .task4 { background-color: #9C27B0; }
+    .task4:hover { background-color: #8E24AA; }
+    .task5 { background-color: #F44336; }
+    .task5:hover { background-color: #E53935; }
+    .graph-button { background-color: #007BFF; } /* Blue color for graph button */
+    .graph-button:hover { background-color: #006BDD; } /* Darker blue on hover */
+    #results, #chartContainer {
+      margin-top: 20px;
+      color: green;
+      font-size: 16px;
+    }
+    #myChart {
+      width: 100%;
+      height: 400px;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<h1>IndexedDB TodoList From Task 1 to 5</h1>
+<div class="button-container">
+  <button class="button task1" onclick="setupIndexedDB(populateTodoList)">Create and Populate TodoList Task-1</button>
+  <button class="button task2" onclick="readObjects(false)">Read All Completed Tasks Task-2</button>
+  <button class="button task3" onclick="readObjects(false, true)">Read Completed Tasks (Read-Only Transaction) Task-3</button>
+  <button class="button task4" onclick="readObjects(true)">Read Completed Tasks (Using Index) Task-4</button>
+  <button class="button task5" onclick="copyCompletedTasksToNewStore()">Copy Completed Tasks to TodoListCompleted Task-5</button>
+  <button class="button task5" onclick="readCompletedTasksFromNewStore()">Read Tasks from TodoListCompleted Task-5</button>
+  <button class="button graph-button" onclick="drawChart()">Plot Graph</button>
+</div>
+<div id="results"></div>
+<div id="chartContainer">
+  <canvas id="myChart"></canvas>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
