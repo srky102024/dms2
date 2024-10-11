@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Sync with MongoDB</title>
+</head>
+<body>
+    <button id="store">Store 1000 Objects in IndexedDB</button>
+    <button id="sync">Sync IndexedDB to MongoDB</button>
+    <button id="fetch">Fetch Data from MongoDB</button>
+    <div id="status"></div>
+
+    <script>
+        // Function to create IndexedDB and store objects
+        async function storeObjects() {
+            const dbRequest = indexedDB.open('lab3', 2);
+
+            dbRequest.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                const objectStore = db.createObjectStore('9744Operations', { keyPath: 'uuid' });
+                objectStore.createIndex('source', 'source', { unique: false });
+                objectStore.createIndex('task_number', 'task_number', { unique: false });
+                objectStore.createIndex('status', 'status', { unique: false });
+                objectStore.createIndex('computing_cost', 'computing_cost', { unique: false });
+            };
+
+            dbRequest.onsuccess = (event) => {
+                const db = event.target.result;
+                const transaction = db.transaction(['9744Operations'], 'readwrite');
+                const objectStore = transaction.objectStore('9744Operations');
+
+                for (let i = 0; i < 1000; i++) {
+                    const object = {
+                        uuid: crypto.randomUUID(),
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                        source: `IndexedDB`,
+                        task_number: `task${i + 1}`,
+                        computing_cost: Math.floor(Math.random() * 100) + 1,
+                        status: Math.random() < 0.5 ? 'processing' : 'done'
+                    };
+                    objectStore.add(object);
+                }
+
+                transaction.oncomplete = () => {
+                    document.getElementById('status').innerText = 'Stored 1000 objects in IndexedDB!';
+                };
+
+                transaction.onerror = (event) => {
+                    console.error('Transaction failed: ', event.target.error);
+                };
+            };
+
+            dbRequest.onerror = (event) => {
+                console.error('Database error: ', event.target.error);
+            };
+        }
+
+        async function syncIndexedToMongo() {
+    const dbRequest = indexedDB.open('lab3', 2);
+
+    dbRequest.onsuccess = (event) => {
+        const db = event.target.result;
+        const transaction = db.transaction(['9744Operations'], 'readonly');
+        const objectStore = transaction.objectStore('9744Operations');
+        const getRequest = objectStore.getAll();
+
+        getRequest.onsuccess = async (event) => {
+            const data = event.target.result;
+            console.log('Data retrieved from IndexedDB:', data); // Log data to verify
+
+            if (Array.isArray(data) && data.length > 0) {
+                try {
+                    const response = await fetch('/sync', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data),
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text(); // Get error details
+                        throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
+                    }
+
+                    const result = await response.json();
+                    console.log('Data synced to MongoDB:', result);
+                    document.getElementById('status').innerText = 'Data successfully synced to MongoDB!';
+                } catch (error) {
+                    console.error('Error syncing data:', error);
+                    document.getElementById('status').innerText = 'Failed to sync data to MongoDB.';
+                }
+            } else {
+                console.error('No valid data found in IndexedDB');
+                document.getElementById('status').innerText = 'No valid data found to sync.';
+            }
+        };
+
+        getRequest.onerror = (event) => {
+            console.error('Failed to retrieve data from IndexedDB:', event.target.error);
+        };
+    };
+
+    dbRequest.onerror = (event) => {
+        console.error('Database error:', event.target.error);
+    };
+}
+
+   
+        async function syncMongoToIndexedDB() {
+            try {
+                // Fetch data from MongoDB
+                const response = await fetch('/fetch-mongo-data');
+                const data = await response.json();
+
+                // Open IndexedDB
+                const dbRequest = indexedDB.open('lab3', 2);
+
+                dbRequest.onsuccess = (event) => {
+                    const db = event.target.result;
+                    const transaction = db.transaction(['9744Operations'], 'readwrite');
+                    const objectStore = transaction.objectStore('9744Operations');
+
+                    data.forEach(item => {
+                        // Add or update the MongoDB data in IndexedDB
+                        objectStore.put(item);  // `put` will update if key exists or add if it doesn't
+                    });
+
+                    transaction.oncomplete = () => {
+                        document.getElementById('status').innerText = 'Data successfully synced from MongoDB to IndexedDB!';
+                    };
+
+                    transaction.onerror = (event) => {
+                        console.error('Transaction failed:', event.target.error);
+                    };
+                };
+
+                dbRequest.onerror = (event) => {
+                    console.error('Database error:', event.target.error);
+                };
+            } catch (error) {
+                console.error('Error syncing data from MongoDB to IndexedDB:', error);
+                document.getElementById('status').innerText = 'Failed to sync data from MongoDB.';
+            }
+        }
+
+    document.getElementById('store').addEventListener('click',storeObjects);
+    document.getElementById('fetch').addEventListener('click', syncMongoToIndexedDB);
+    document.getElementById('sync').addEventListener('click', syncIndexedToMongo);
+    </script>
+</body>
+</html>
