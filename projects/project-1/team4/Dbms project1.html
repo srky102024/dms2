@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Test Results</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <h2>Performance Test Results</h2>
+    <canvas id="performanceChart" width="400" height="200"></canvas>
+
+    <script>
+        // Array to store time results for different performance tests
+        let performanceData = {
+            "Without Optimization": 0,
+            "With Indexing": 0,
+            "With Read-Only Transaction": 0,
+            "With Dedicated Store": 0
+        };
+
+        let request = indexedDB.open("TodoDatabase", 4);
+
+        request.onupgradeneeded = function(event) {
+            let db = event.target.result;
+            if (db.objectStoreNames.contains("TodoList")) {
+                db.deleteObjectStore("TodoList");
+            }
+            if (db.objectStoreNames.contains("CompletedTasks")) {
+                db.deleteObjectStore("CompletedTasks");
+            }
+
+            let todoStore = db.createObjectStore("TodoList", { keyPath: "id" });
+            todoStore.createIndex("status", "status", { unique: false });
+            db.createObjectStore("CompletedTasks", { keyPath: "id" });
+        };
+
+        request.onsuccess = function(event) {
+            let db = event.target.result;
+            let transaction = db.transaction("TodoList", "readwrite");
+            let objectStore = transaction.objectStore("TodoList");
+
+            objectStore.count().onsuccess = function(event) {
+                if (event.target.result === 0) {
+                    populateDatabase(db);
+                } else {
+                    runPerformanceTests(db);
+                }
+            };
+        };
+
+        request.onerror = function(event) {
+            console.error("Database error: ", event.target.error);
+        };
+
+        function populateDatabase(db) {
+            let transaction = db.transaction(["TodoList", "CompletedTasks"], "readwrite");
+            let todoStore = transaction.objectStore("TodoList");
+            let completedStore = transaction.objectStore("CompletedTasks");
+
+            for (let i = 1; i <= 100000; i++) {
+                let task = {
+                    id: i,
+                    task: Task ${i},
+                    status: i <= 1000 ? "completed" : "in progress",
+                    dueDate: getRandomDate()
+                };
+                todoStore.add(task);
+                if (task.status === "completed") {
+                    completedStore.add(task);
+                }
+            }
+
+            transaction.oncomplete = function() {
+                runPerformanceTests(db);
+            };
+        }
+
+        function runPerformanceTests(db) {
+            let start, duration;
+
+            // Test without optimization
+            start = performance.now();
+            let transaction = db.transaction("TodoList", "readonly");
+            let objectStore = transaction.objectStore("TodoList");
+            objectStore.getAll().onsuccess = function() {
+                duration = performance.now() - start;
+                performanceData["Without Optimization"] = duration;
+
+                // Test with Indexing
+                start = performance.now();
+                let statusIndex = objectStore.index("status");
+                statusIndex.getAll("completed").onsuccess = function() {
+                    duration = performance.now() - start;
+                    performanceData["With Indexing"] = duration;
+
+                    // Test with Read-Only Transaction
+                    start = performance.now();
+                    transaction = db.transaction("TodoList", "readonly");
+                    transaction.objectStore("TodoList").getAll().onsuccess = function() {
+                        duration = performance.now() - start;
+                        performanceData["With Read-Only Transaction"] = duration;
+
+                        // Test with Dedicated Store
+                        start = performance.now();
+                        transaction = db.transaction("CompletedTasks", "readonly");
+                        transaction.objectStore("CompletedTasks").getAll().onsuccess = function() {
+                            duration = performance.now() - start;
+                            performanceData["With Dedicated Store"] = duration;
+
+                            // Draw the chart after collecting all data
+                            drawChart();
+                        };
+                    };
+                };
+            };
+        }
+
+        function getRandomDate() {
+            const start = new Date(2023, 0, 1);
+            const end = new Date(2025, 11, 31);
+            const randomDate = new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+            return randomDate.toISOString().split('T')[0];
+        }
+
+        function drawChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(performanceData),
+                    datasets: [{
+                        label: 'Performance (ms)',
+                        data: Object.values(performanceData),
+                        backgroundColor: [
+                            'rgba(75, 192, 192, 0.6)',
+                            'rgba(54, 162, 235, 0.6)',
+                            'rgba(255, 206, 86, 0.6)',
+                            'rgba(153, 102, 255, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(153, 102, 255, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

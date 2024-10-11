@@ -1,0 +1,115 @@
+let request = indexedDB.open("TodoDatabase", 4);
+
+request.onupgradeneeded = function(event) {
+    let db = event.target.result;
+
+    // Check and delete existing stores to avoid version conflicts
+    if (db.objectStoreNames.contains("TodoList")) {
+        db.deleteObjectStore("TodoList");
+    }
+    if (db.objectStoreNames.contains("CompletedTasks")) {
+        db.deleteObjectStore("CompletedTasks");
+    }
+
+    // Create main "TodoList" object store with index on "status"
+    let todoStore = db.createObjectStore("TodoList", { keyPath: "id" });
+    todoStore.createIndex("status", "status", { unique: false });
+
+    // Create dedicated store for completed tasks
+    db.createObjectStore("CompletedTasks", { keyPath: "id" });
+};
+
+request.onsuccess = function(event) {
+    let db = event.target.result;
+
+    // Check if "TodoList" store is empty to prevent duplicate data
+    let transaction = db.transaction("TodoList", "readwrite");
+    let objectStore = transaction.objectStore("TodoList");
+
+    objectStore.count().onsuccess = function(event) {
+        if (event.target.result === 0) {
+            populateDatabase(db);
+        } else {
+            console.log("Database already populated. Starting performance tests...");
+            runPerformanceTests(db);
+        }
+    };
+};
+
+request.onerror = function(event) {
+    console.error("Database error: ", event.target.error);
+};
+
+// Function to populate database with 100,000 entries
+function populateDatabase(db) {
+    let transaction = db.transaction(["TodoList", "CompletedTasks"], "readwrite");
+    let todoStore = transaction.objectStore("TodoList");
+    let completedStore = transaction.objectStore("CompletedTasks");
+
+    for (let i = 1; i <= 100000; i++) {
+        let task = {
+            id: i,
+            task: Task ${i},  // Corrected line using backticks
+            status: i <= 1000 ? "completed" : "in progress",
+            dueDate: getRandomDate()
+        };
+        todoStore.add(task);
+        if (task.status === "completed") {
+            completedStore.add(task);
+        }
+    }
+
+    transaction.oncomplete = function() {
+        console.log("Database populated with 100,000 entries.");
+        runPerformanceTests(db);
+    };
+    transaction.onerror = function(event) {
+        console.error("Error adding entries: ", event.target.error);
+    };
+}
+
+// Function to run performance tests
+function runPerformanceTests(db) {
+    // Baseline Test without Optimization
+    let start = performance.now();
+    let transaction = db.transaction("TodoList", "readonly");
+    let objectStore = transaction.objectStore("TodoList");
+    let request = objectStore.getAll();
+    request.onsuccess = function() {
+        console.log("Time without optimization:", (performance.now() - start), "ms");
+    };
+
+    // Test with Indexing
+    start = performance.now();
+    transaction = db.transaction("TodoList", "readonly");
+    let statusIndex = objectStore.index("status");
+    statusIndex.getAll("completed").onsuccess = function() {
+        console.log("Time with indexing:", (performance.now() - start), "ms");
+    };
+
+    // Test with Read-Only Transaction
+    start = performance.now();
+    transaction = db.transaction("TodoList", "readonly");
+    transaction.objectStore("TodoList").getAll().onsuccess = function() {
+        console.log("Time with read-only transaction:", (performance.now() - start), "ms");
+    };
+
+    // Test with Dedicated Object Store for Completed Tasks
+    start = performance.now();
+    transaction = db.transaction("CompletedTasks", "readonly");
+    transaction.objectStore("CompletedTasks").getAll().onsuccess = function() {
+        console.log("Time with dedicated object store for completed tasks:", (performance.now() - start), "ms");
+    };
+}
+
+// Function to generate a random date between 2023-01-01 and 2025-12-31
+function getRandomDate() {
+    const start = new Date(2023, 0, 1);
+    const end = new Date(2025, 11, 31);
+    const randomDate = new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+    return randomDate.toISOString().split('T')[0];
+}
+
+ƒ (event) {
+    console.error("Database error: ", event.target.error);
+}
