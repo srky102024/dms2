@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB TodoList Example</title>
+</head>
+<body>
+
+    <script>
+        
+        function initIndexedDB() {
+            
+            const request = indexedDB.open('TodoDatabase', 1);
+
+            
+            request.onupgradeneeded = function (event) {
+                const db = event.target.result;
+                const objectStore = db.createObjectStore('TodoList', { keyPath: 'id', autoIncrement: true });
+                objectStore.createIndex('task', 'task', { unique: false });
+                objectStore.createIndex('status', 'status', { unique: false });
+                objectStore.createIndex('dueDate', 'dueDate', { unique: false });
+                db.createObjectStore('TodoListCompleted', { keyPath: 'id' }); 
+            };
+
+            
+            request.onsuccess = function (event) {
+                const db = event.target.result;
+                console.log("Database initialized successfully.");
+                populateDatabase(db);
+            };
+
+            request.onerror = function (event) {
+                console.error("Error initializing database:", event.target.errorCode);
+            };
+        }
+
+        
+        function generateRandomTask(id, status) {
+            const tasks = [
+                "Finish the monthly report",
+                "Update website content",
+                "Prepare for client presentation",
+                "Review team feedback",
+                "Organize office meeting",
+                "Plan team outing",
+                "Write project proposal",
+                "Test new feature",
+                "Fix bugs in application",
+                "Send invoices to clients"
+            ];
+
+            const randomTask = tasks[Math.floor(Math.random() * tasks.length)];
+            const randomDueDate = new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1)
+                .toISOString().split('T')[0];
+
+            return {
+                id: id,
+                task: randomTask,
+                status: status,
+                dueDate: randomDueDate
+            };
+        }
+
+        
+        function populateDatabase(db) {
+            const transaction = db.transaction(['TodoList'], 'readwrite');
+            const objectStore = transaction.objectStore('TodoList');
+
+            
+            for (let i = 1; i <= 100000; i++) {
+                const status = (i <= 1000) ? "completed" : "in progress";
+                const task = generateRandomTask(i, status);
+                objectStore.add(task);
+            }
+
+            transaction.oncomplete = function () {
+                console.log("100,000 tasks added to the database.");
+                fetchAndDisplayCompletedTasks(db); 
+                fetchAndDisplayAllTasks(db); 
+                copyCompletedTasksToNewStore(db); 
+            };
+
+            transaction.onerror = function (event) {
+                console.error("Transaction error:", event.target.errorCode);
+            };
+        }
+
+        
+        function fetchAndDisplayCompletedTasks(db) {
+            const transaction = db.transaction(['TodoList'], 'readonly'); 
+            const objectStore = transaction.objectStore('TodoList');
+            const request = objectStore.openCursor(); 
+
+            let completedTasks = [];
+            const startTime = performance.now(); 
+
+            request.onsuccess = function (event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    
+                    if (cursor.value.status === "completed") {
+                        completedTasks.push(cursor.value); 
+                    }
+                    cursor.continue(); 
+                } else {
+                    
+                    const endTime = performance.now(); 
+                    console.log("Fetched completed tasks:", completedTasks.length); 
+                    console.log(`Time taken to fetch completed tasks: ${(endTime - startTime).toFixed(2)} ms`);
+                }
+            };
+
+            request.onerror = function (event) {
+                console.error("Error fetching tasks:", event.target.errorCode);
+            };
+        }
+
+        
+        function fetchAndDisplayAllTasks(db) {
+            const transaction = db.transaction(['TodoList'], 'readonly'); 
+            const objectStore = transaction.objectStore('TodoList');
+            const request = objectStore.openCursor(); 
+
+            let allTasks = [];
+            const startTime = performance.now(); 
+
+            request.onsuccess = function (event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    allTasks.push(cursor.value); 
+                    cursor.continue(); 
+                } else {
+                    
+                    const endTime = performance.now(); 
+                    console.log("Fetched all tasks:", allTasks.length); 
+                    console.log(`Time taken to fetch all tasks: ${(endTime - startTime).toFixed(2)} ms`);
+                }
+            };
+
+            request.onerror = function (event) {
+                console.error("Error fetching tasks:", event.target.errorCode);
+            };
+        }
+
+        
+        function copyCompletedTasksToNewStore(db) {
+            const transaction = db.transaction(['TodoList', 'TodoListCompleted'], 'readwrite');
+            const todoListStore = transaction.objectStore('TodoList');
+            const completedStore = transaction.objectStore('TodoListCompleted');
+
+            const request = todoListStore.openCursor(); 
+            let completedTasks = [];
+            const startTime = performance.now(); 
+
+            request.onsuccess = function (event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    if (cursor.value.status === "completed") {
+                        completedTasks.push(cursor.value); 
+                        completedStore.add(cursor.value); 
+                    }
+                    cursor.continue(); 
+                } else {
+                    
+                    const endTime = performance.now(); 
+                    console.log("Copied completed tasks to TodoListCompleted:", completedTasks.length); 
+                    console.log(`Time taken to copy completed tasks: ${(endTime - startTime).toFixed(2)} ms`);
+                    fetchAndDisplayCompletedTasksFromNewStore(db); 
+                }
+            };
+
+            request.onerror = function (event) {
+                console.error("Error copying tasks:", event.target.errorCode);
+            };
+        }
+
+        
+        function fetchAndDisplayCompletedTasksFromNewStore(db) {
+            const transaction = db.transaction(['TodoListCompleted'], 'readonly'); 
+            const objectStore = transaction.objectStore('TodoListCompleted');
+            const request = objectStore.openCursor(); 
+
+            let completedTasks = [];
+            const startTime = performance.now(); 
+
+            request.onsuccess = function (event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    completedTasks.push(cursor.value); 
+                    cursor.continue(); 
+                } else {
+                    
+                    const endTime = performance.now(); 
+                    console.log("Fetched completed tasks from TodoListCompleted:", completedTasks.length); 
+                    console.log(`Time taken to fetch completed tasks from TodoListCompleted: ${(endTime - startTime).toFixed(2)} ms`);
+                }
+            };
+
+            request.onerror = function (event) {
+                console.error("Error fetching completed tasks from new store:", event.target.errorCode);
+            };
+        }
+
+        
+        window.onload = function () {
+            initIndexedDB();
+        };
+    </script>
+</body>
+</html>
