@@ -1,0 +1,253 @@
+let performanceData = [];
+
+// Open (or create) the IndexedDB database with version 4
+let request = indexedDB.open("TodoDatabase", 4);
+
+request.onupgradeneeded = function(event) {
+    let db = event.target.result;
+
+    // Check and delete existing stores to avoid version conflicts
+    if (db.objectStoreNames.contains("TodoList")) {
+        db.deleteObjectStore("TodoList");
+    }
+    if (db.objectStoreNames.contains("CompletedTasks")) {
+        db.deleteObjectStore("CompletedTasks");
+    }
+
+    // Create main "TodoList" object store with index on "status"
+    let todoStore = db.createObjectStore("TodoList", { keyPath: "id" });
+    todoStore.createIndex("status", "status", { unique: false });
+
+    // Create dedicated store for completed tasks
+    db.createObjectStore("CompletedTasks", { keyPath: "id" });
+};
+
+request.onsuccess = function(event) {
+    let db = event.target.result;
+
+    // Check if "TodoList" store is empty to prevent duplicate data
+    let transaction = db.transaction("TodoList", "readwrite");
+    let objectStore = transaction.objectStore("TodoList");
+
+    objectStore.count().onsuccess = function(event) {
+        if (event.target.result === 0) {
+            populateDatabase(db);
+        } else {
+            logOutput("Database already populated. Starting performance tests...");
+            runPerformanceTests(db);
+        }
+    };
+};
+
+request.onerror = function(event) {
+    console.error("Database error: ", event.target.error);
+    logOutput("Database error: " + event.target.error);
+};
+
+// Function to populate database with 100,000 entries
+function populateDatabase(db) {
+    let transaction = db.transaction(["TodoList", "CompletedTasks"], "readwrite");
+    let todoStore = transaction.objectStore("TodoList");
+    let completedStore = transaction.objectStore("CompletedTasks");
+
+    // Use a setTimeout loop to avoid blocking the browser while adding 100,000 entries
+    let batchSize = 1000;
+    let totalEntries = 100000;
+    let currentEntry = 1;
+
+    function addBatch() {
+        for (let i = currentEntry; i < currentEntry + batchSize && i <= totalEntries; i++) {
+            let task = {
+                id: i,
+                task: `Task ${i}`,
+                status: i <= 1000 ? "completed" : "in progress",
+                dueDate: getRandomDate()
+            };
+            todoStore.add(task);
+            if (task.status === "completed") {
+                completedStore.add(task);
+            }
+        }
+
+        currentEntry += batchSize;
+
+        if (currentEntry <= totalEntries) {
+            // Continue adding more batches
+            setTimeout(addBatch, 0);
+        } else {
+            transaction.oncomplete = function() {
+                logOutput("Database populated with 100,000 entries.");
+                runPerformanceTests(db);
+            };
+            transaction.onerror = function(event) {
+                console.error("Error adding entries: ", event.target.error);
+                logOutput("Error adding entries: " + event.target.error);
+            };
+        }
+    }
+
+    addBatch();
+}
+
+// Function to run performance tests
+function runPerformanceTests(db) {
+    let transaction, start, duration;
+
+    // Baseline Test without Optimization
+    start = performance.now();
+    transaction = db.transaction("TodoList", "readonly");
+    let objectStore = transaction.objectStore("TodoList");
+    objectStore.getAll().onsuccess = function() {
+        duration = performance.now() - start;
+        logOutput(`Time without optimization: ${duration.toFixed(2)} ms`);
+        performanceData.push(duration);
+
+        // Proceed with other tests after this one completes
+        runIndexingTest(db);
+    };
+
+    objectStore.getAll().onerror = function(event) {
+        console.error("Error in baseline test: ", event.target.error);
+        logOutput("Error in baseline test: " + event.target.error);
+    };
+}
+
+function runIndexingTest(db) {
+    let start = performance.now();
+    let transaction = db.transaction("TodoList", "readonly");
+    let objectStore = transaction.objectStore("TodoList");
+    let statusIndex = objectStore.index("status");
+
+    statusIndex.getAll("completed").onsuccess = function() {
+        let duration = performance.now() - start;
+        logOutput(`Time with indexing: ${duration.toFixed(2)} ms`);
+        performanceData.push(duration);
+
+        // Proceed with next test
+        runReadOnlyTest(db);
+    };
+
+    statusIndex.getAll("completed").onerror = function(event) {
+        console.error("Error in indexing test: ", event.target.error);
+        logOutput("Error in indexing test: " + event.target.error);
+    };
+}
+
+function runReadOnlyTest(db) {
+    let start = performance.now();
+    let transaction = db.transaction("TodoList", "readonly");
+    let objectStore = transaction.objectStore("TodoList");
+    objectStore.getAll().onsuccess = function() {
+        let duration = performance.now() - start;
+        logOutput(`Time with read-only transaction: ${duration.toFixed(2)} ms`);
+        performanceData.push(duration);
+
+        // Proceed with final test
+        runDedicatedStoreTest(db);
+    };
+
+    objectStore.getAll().onerror = function(event) {
+        console.error("Error in read-only test: ", event.target.error);
+        logOutput("Error in read-only test: " + event.target.error);
+    };
+}
+
+function runDedicatedStoreTest(db) {
+    let start = performance.now();
+    let transaction = db.transaction("CompletedTasks", "readonly");
+    let objectStore = transaction.objectStore("CompletedTasks");
+    objectStore.getAll().onsuccess = function() {
+        let duration = performance.now() - start;
+        logOutput(`Time with dedicated object store for completed tasks: ${duration.toFixed(2)} ms`);
+        performanceData.push(duration);
+
+        // After all tests, draw the chart
+        drawChart();
+    };
+
+    objectStore.getAll().onerror = function(event) {
+        console.error("Error in dedicated store test: ", event.target.error);
+        logOutput("Error in dedicated store test: " + event.target.error);
+    };
+}
+
+// Function to generate a random date between 2023-01-01 and 2025-12-31
+function getRandomDate() {
+    const start = new Date(2023, 0, 1);
+    const end = new Date(2025, 11, 31);
+    const randomDate = new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+    return randomDate.toISOString().split('T')[0];
+}
+
+// Utility function to log output to both the console and the HTML page
+function logOutput(message) {
+    console.log(message);
+    let outputDiv = document.getElementById('output');
+    if (outputDiv) {
+        outputDiv.innerHTML += `<p>${message}</p>`;
+    }
+}
+
+// Function to draw the performance chart
+function drawChart() {
+    const ctx = document.getElementById('performanceChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [
+                'Without Optimization',
+                'With Indexing',
+                'Read-Only Transaction',
+                'Dedicated Store for Completed Tasks'
+            ],
+            datasets: [{
+                label: 'Time (ms)',
+                data: performanceData,
+                backgroundColor: [
+                    'rgba(75, 192, 192, 0.2)',
+                    'rgba(255, 159, 64, 0.2)',
+                    'rgba(153, 102, 255, 0.2)',
+                    'rgba(255, 99, 132, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(255, 159, 64, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 99, 132, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Time: ${context.raw.toFixed(2)} ms`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Time (ms)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Test Type'
+                    }
+                }
+            }
+        }
+    });
+}
