@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 3 - IndexedDB Objects</title>
+    <script>
+        // Open IndexedDB
+        let db;
+        const request = indexedDB.open("ObjectStoreDB", 1);
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains("objects")) {
+                const objectStore = db.createObjectStore("objects", { keyPath: "uuid" });
+            }
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            generateAndStoreObjects();
+        };
+
+        request.onerror = function(event) {
+            console.error("Error opening IndexedDB:", event.target.error);
+        };
+
+        // Generate a UUID
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Generate 1000 random objects and store them in IndexedDB
+        function generateAndStoreObjects() {
+            const transaction = db.transaction(["objects"], "readwrite");
+            const objectStore = transaction.objectStore("objects");
+
+            for (let i = 0; i < 1000; i++) {
+                const obj = {
+                    uuid: generateUUID(),
+                    source: "IndexedDB",
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    quantity: Math.floor(Math.random() * 100) + 1,
+                    status: randomChoice(["active", "inactive", "pending"]),
+                    type: randomChoice(["internship", "full-time", "part-time"])
+                };
+                objectStore.add(obj);
+            }
+
+            transaction.oncomplete = function() {
+                console.log("All objects have been stored in IndexedDB.");
+            };
+
+            transaction.onerror = function(event) {
+                console.error("Error storing objects:", event.target.error);
+            };
+        }
+
+        // Return a random choice from array
+        function randomChoice(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        // Retrieve and log all objects from IndexedDB
+        function retrieveObjects() {
+            const transaction = db.transaction(["objects"], "readonly");
+            const objectStore = transaction.objectStore("objects");
+
+            const request = objectStore.getAll();
+            request.onsuccess = function(event) {
+                console.log("Stored objects:", event.target.result);
+            };
+        }
+    </script>
+</head>
+<body>
+    <h1>Lab3 - Generate 1000 Objects and Store in IndexedDB</h1>
+</body>
+</html>
