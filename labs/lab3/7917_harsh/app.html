@@ -1,0 +1,157 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title></title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="2113.6">
+  <style type="text/css">
+    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
+    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
+  </style>
+</head>
+<body>
+<p class="p1">&lt;!DOCTYPE html&gt;</p>
+<p class="p1">&lt;html lang="en"&gt;</p>
+<p class="p1">&lt;head&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;meta charset="UTF-8"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;title&gt;IndexedDB Company Generator&lt;/title&gt;</p>
+<p class="p1">&lt;/head&gt;</p>
+<p class="p1">&lt;body&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;h1&gt;IndexedDB Company Object Generator&lt;/h1&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;button id="generate"&gt;Generate 1000 Companies&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;div id="status"&gt;&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;script&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>const dbName = "CompanyDatabase";</p>
+<p class="p1"><span class="Apple-converted-space">        </span>const storeName = "CompanyObjectStore";</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>// Open (or create) the database</p>
+<p class="p1"><span class="Apple-converted-space">        </span>const request = indexedDB.open(dbName, 1);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>request.onupgradeneeded = function(event) {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const db = event.target.result;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>db.createObjectStore(storeName, { keyPath: "uuid" });</p>
+<p class="p1"><span class="Apple-converted-space">        </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>request.onsuccess = function(event) {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const db = event.target.result;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>document.getElementById("generate").onclick = function() {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>generateCompanies(db);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>};</p>
+<p class="p1"><span class="Apple-converted-space">        </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>request.onerror = function(event) {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>console.error("Database error: " + event.target.errorCode);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>function generateCompanies(db) {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const transaction = db.transaction([storeName], "readwrite");</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const store = transaction.objectStore(storeName);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>for (let i = 0; i &lt; 1000; i++) {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>const company = {</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>uuid: crypto.randomUUID(),</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>source: "IndexedDB",</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>createdAt: new Date().toISOString(),</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>updatedAt: new Date().toISOString(),</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>companyName: `Company ${i + 1}`,</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>industry: getRandomIndustry(),</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>location: `Location ${Math.floor(Math.random() * 100)}`,</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>employeeCount: Math.floor(Math.random() * 1000) + 1</p>
+<p class="p1"><span class="Apple-converted-space">                </span>};</p>
+<p class="p1"><span class="Apple-converted-space">                </span>store.add(company);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>transaction.oncomplete = function() {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>document.getElementById("status").innerText = "1000 companies generated successfully!";</p>
+<p class="p1"><span class="Apple-converted-space">            </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>transaction.onerror = function(event) {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>console.error("Transaction error: " + event.target.errorCode);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>};</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>function getRandomIndustry() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const industries = [</p>
+<p class="p1"><span class="Apple-converted-space">                </span>"Technology", "Finance", "Healthcare", "Education",<span class="Apple-converted-space"> </span></p>
+<p class="p1"><span class="Apple-converted-space">                </span>"Retail", "Manufacturing", "Construction", "Transportation"</p>
+<p class="p1"><span class="Apple-converted-space">            </span>];</p>
+<p class="p1"><span class="Apple-converted-space">            </span>return industries[Math.floor(Math.random() * industries.length)];</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;/script&gt;</p>
+<p class="p1">&lt;/body&gt;</p>
+<p class="p1">&lt;/html&gt;</p>
+<p class="p1">&lt;!DOCTYPE html&gt;</p>
+<p class="p1">&lt;html lang="en"&gt;</p>
+<p class="p1">&lt;head&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;meta charset="UTF-8"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;title&gt;IndexedDB Object Storage&lt;/title&gt;</p>
+<p class="p1">&lt;/head&gt;</p>
+<p class="p1">&lt;body&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;h1&gt;IndexedDB Object Generator&lt;/h1&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;button id="generate"&gt;Generate and Store 1000 Objects&lt;/button&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;script&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>// Function to generate a UUID (universally unique identifier)</p>
+<p class="p1"><span class="Apple-converted-space">        </span>function generateUUID() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r &amp; 0x3 | 0x8);</p>
+<p class="p1"><span class="Apple-converted-space">                </span>return v.toString(16);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>});</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>// Open (or create) the IndexedDB</p>
+<p class="p1"><span class="Apple-converted-space">        </span>let db;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>const request = indexedDB.open('ObjectDB', 1);</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>request.onupgradeneeded = function(event) {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>db = event.target.result;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const objectStore = db.createObjectStore('objects', { keyPath: 'id' });</p>
+<p class="p1"><span class="Apple-converted-space">            </span>objectStore.createIndex('source', 'source', { unique: false });</p>
+<p class="p1"><span class="Apple-converted-space">            </span>objectStore.createIndex('created', 'created', { unique: false });</p>
+<p class="p1"><span class="Apple-converted-space">            </span>objectStore.createIndex('updated', 'updated', { unique: false });</p>
+<p class="p1"><span class="Apple-converted-space">        </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>request.onsuccess = function(event) {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>db = event.target.result;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>console.log('Database opened successfully');</p>
+<p class="p1"><span class="Apple-converted-space">        </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>request.onerror = function(event) {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>console.log('Error opening database:', event.target.errorCode);</p>
+<p class="p1"><span class="Apple-converted-space">        </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>// Generate 1000 objects and store them in IndexedDB</p>
+<p class="p1"><span class="Apple-converted-space">        </span>document.getElementById('generate').addEventListener('click', function() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const transaction = db.transaction(['objects'], 'readwrite');</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const objectStore = transaction.objectStore('objects');</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>for (let i = 0; i &lt; 1000; i++) {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>const obj = {</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>id: generateUUID(),</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>source: 'IndexedDB',</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>created: new Date().toISOString(),</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>updated: new Date().toISOString(),</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>attr1: `Attribute1_${i}`,</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>attr2: `Attribute2_${i}`,</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>attr3: `Attribute3_${i}`</p>
+<p class="p1"><span class="Apple-converted-space">                </span>};</p>
+<p class="p1"><span class="Apple-converted-space">                </span>objectStore.add(obj);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>transaction.oncomplete = function() {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>console.log('All objects have been added to the database.');</p>
+<p class="p1"><span class="Apple-converted-space">            </span>};</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>transaction.onerror = function(event) {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>console.log('Transaction error:', event.target.errorCode);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>};</p>
+<p class="p1"><span class="Apple-converted-space">        </span>});</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;/script&gt;</p>
+<p class="p1">&lt;/body&gt;</p>
+<p class="p1">&lt;/html&gt;</p>
+</body>
+</html>

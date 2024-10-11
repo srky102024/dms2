@@ -1,9 +1,9 @@
 const { MongoClient } = require('mongodb');
 
 // MongoDB connection configuration
-const mongoUri = "mongodb+srv://username:password@cluster0.lixbqmp.mongodb.net/lab3"; // Update with your credentials
+const mongoUri = "mongodb+srv://i40:dbms2@cluster0.lixbqmp.mongodb.net/lab3";
 const dbName = "lab3";
-const collectionName = "1552_Vishnu_bhargav";
+const collectionName = "harsh_7917";
 
 // Simulated IndexedDB database using an in-memory JavaScript object
 let indexedDBData = {};
@@ -39,10 +39,12 @@ async function syncMongoDBToIndexedDB() {
 
         mongoData.forEach((doc) => {
             if (!indexedDBData[doc.uuid]) {
-                indexedDBData[doc.uuid] = doc; // Add new data to simulated IndexedDB
+                // Add new data to simulated IndexedDB
+                indexedDBData[doc.uuid] = doc;
                 recordsAddedToIndexedDB++;
             } else {
-                indexedDBData[doc.uuid] = { ...indexedDBData[doc.uuid], ...doc }; // Update existing data
+                // Update existing data in simulated IndexedDB
+                indexedDBData[doc.uuid] = { ...indexedDBData[doc.uuid], ...doc };
             }
         });
 
