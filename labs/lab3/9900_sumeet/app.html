@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IndexedDB</title>
+  </head>
+  <body>
+    <h1>Health Statistics</h1>
+    <button id="SyncButton">Sync MongoDB</button>
+    <button id="SyncIdxDB">Sync IndexedDB</button>
+    <script>
+      const setup_indexed_db = (callback) => {
+        let dbRequest = indexedDB.open("health_statistics", 1);
+        console.log("Setting up IndexedDB");
+        dbRequest.onupgradeneeded = (event) => {
+          let db = event.target.result;
+          if (!db.objectStoreNames.contains("statistics")) {
+            let statistics_objectStore = db.createObjectStore("statistics", {
+              keyPath: "id",
+              autoIncrement: true,
+            });
+            statistics_objectStore.createIndex("uuid", "uuid", {
+              unique: true,
+            });
+            statistics_objectStore.createIndex("source", "source", {
+              unique: false,
+            });
+            statistics_objectStore.createIndex(
+              "timestamp_creation",
+              "timestamp_creation",
+              { unique: false }
+            );
+            statistics_objectStore.createIndex(
+              "timestamp_update",
+              "timestamp_update",
+              { unique: false }
+            );
+            statistics_objectStore.createIndex("date", "date", {
+              unique: false,
+            });
+            statistics_objectStore.createIndex("weight", "weight", {
+              unique: false,
+            });
+            statistics_objectStore.createIndex("height", "height", {
+              unique: false,
+            });
+            statistics_objectStore.createIndex("age", "age", { unique: false });
+            statistics_objectStore.createIndex("bmi", "bmi", { unique: false });
+            statistics_objectStore.createIndex("gender", "gender", {
+              unique: false,
+            });
+          }
+        };
+        dbRequest.onsuccess = (event) => {
+          let db = event.target.result;
+          callback(db);
+        };
+
+        dbRequest.onerror = (event) => {
+          console.log("Error setting up IndexedDB");
+        };
+      };
+
+      const generateUUID = () => {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+          /[xy]/g,
+          function (c) {
+            const r = (Math.random() * 16) | 0,
+              v = c == "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          }
+        );
+      };
+
+      const generateRandomData = () => {
+        const gender = ['M', 'F'];
+        let data = {
+          uuid: generateUUID(),
+          source: "IndexDB",
+          timestamp_creation: new Date().toISOString(),
+          timestamp_update: 0,
+          weight: (Math.random() * (50.0 - 90.0) + 90.0).toFixed(1),
+          height: Math.floor(Math.random() * (150 - 200) + 200),
+          age: Math.floor(Math.random() * (18 - 70)+70),
+          bmi: (Math.random() * (18 - 40)+ 40).toFixed(1),
+          gender: gender[Math.floor(Math.random() * gender.length)]
+        };
+        return data;
+      };
+
+      const addObjects = (db,callback) => 
+      {
+        console.log("Adding objects to IndexedDB");
+        let transaction = db.transaction(["statistics"], "readonly");
+        let objectStore = transaction.objectStore("statistics");
+        let countRequest = objectStore.count();
+        countRequest.onsuccess = (event) => {
+            if(countRequest.result === 0)
+            {
+                let writeTransaction = db.transaction(["statistics"], "readwrite");
+                let writeObjectStore = writeTransaction.objectStore("statistics");
+                for(let i = 0; i < 1000; i++)
+                {
+                    let data = generateRandomData();
+                    writeObjectStore.add(data);
+                }
+                writeTransaction.oncomplete = (event) => {
+                    console.log("Added objects to IndexedDB");
+                    callback();
+                };
+                writeTransaction.onerror = (event) => {
+                    console.log("Error adding objects to IndexedDB");
+                }
+            }
+            else
+            {
+                console.log("objects already in IndexedDB");
+                callback();
+            }
+        };
+      };
+
+      setup_indexed_db((db) => {
+        addObjects(db,() => {
+            console.log("Data added to IndexedDB");
+            console.log("Completed setup of IndexedDB");
+            db.close();
+            console.log("Closed IndexedDB");
+            
+        });
+      });
+      
+      document.getElementById("SyncButton").addEventListener("click", () => {
+        const db = indexedDB.open("health_statistics", 1);
+        let data;
+        db.onsuccess = (event) => {
+          const db = event.target.result;
+          const transaction = db.transaction(["statistics"], "readonly");
+          const objectStore = transaction.objectStore("statistics");
+          const request = objectStore.getAll();
+          request.onsuccess = (event) => {
+            data = event.target.result;
+
+            const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/SyncMongoFromIndexed", true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        
+        
+        const jsonData = JSON.stringify(data);
+        xhr.send(jsonData);
+
+        xhr.onload = () => {
+
+          if(xhr.status === 200)
+          {
+            console.log(jsonData);
+            console.log("Data synced to MongoDB");
+          }
+          else
+          {
+            console.log("Error syncing data to MongoDB");
+          }
+        };
+          };
+        };
+      });
+    
+      document.getElementById("SyncIdxDB").addEventListener("click", () => {
+  const dbConnection = indexedDB.open("health_statistics", 1);
+  dbConnection.onsuccess = (event) => {
+    const db = event.target.result;
+    const transaction = db.transaction(["statistics"], "readonly");
+    const objectStore = transaction.objectStore("statistics");
+    const request = objectStore.getAll();
+    request.onsuccess = (event) => {
+      const xhttp = new XMLHttpRequest();
+      xhttp.open('GET', '/SyncIdxDBFromMongo', true);
+      xhttp.onload = function() {
+        if (xhttp.status === 200) {
+          const data = JSON.parse(xhttp.responseText);
+          console.log(data);
+          const transaction = db.transaction(["statistics"], "readwrite");
+          const objectStore = transaction.objectStore("statistics");
+          let fakeData = generateRandomData();
+          for (let i = 0; i < data.length; i++) {
+            // just add mongo data to indexedDB
+            if(data[i].source === "MongoDB")
+            {
+              objectStore.put(data[i]);
+            }
+          }
+          transaction.oncomplete = () => {
+            console.log("Data synced to IndexedDB");
+          };
+          transaction.onerror = (error) => {
+            console.log("Error syncing data to IndexedDB:");
+          };
+          let countRequest = objectStore.count();
+          countRequest.onsuccess = (event) => {
+            console.log("Number of objects in IndexedDB: " + countRequest.result);
+          };
+
+          countRequest.onerror = (event) => {
+            console.log("Error counting objects in IndexedDB");
+          };
+        }
+      };
+      xhttp.send();
+    };
+  };
+});
+    </script>
+    <script src="sync.js"/>
+    <script src="https://requirejs.org/docs/release/2.3.5/minified/require.js"></script>
+  </body>
+</html>
