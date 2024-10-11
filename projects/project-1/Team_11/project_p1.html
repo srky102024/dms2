@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List Task Completion</title>
+    <!-- Include Chart.js library for graph rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Fix the size of the canvas to 10cm width and proportionate height */
+        #timeChart {
+            width: 10cm;
+            height: 5cm;
+        }
+    </style>
+</head>
+<body>
+    <h1>Todo List Task Completion</h1>
+    <p>Click the buttons to complete each task step by step.</p>
+
+    <button id="task1Button">Complete Task 1: Define and Populate Object Store</button><br><br>
+    <button id="task2Button" disabled>Complete Task 2: Measure Read Time (All Completed Tasks)</button><br><br>
+    <button id="task3Button" disabled>Complete Task 3: Read-Only Mode</button><br><br>
+    <button id="task4Button" disabled>Complete Task 4: Create Index and Read Completed Tasks</button><br><br>
+    <button id="task5Button" disabled>Complete Task 5: Copy to New Store and Measure</button><br><br>
+
+    <!-- The canvas for the chart, set to a smaller fixed size -->
+    <canvas id="timeChart"></canvas>
+
+    <script src="script.js"></script>
+</body>
+</html>
