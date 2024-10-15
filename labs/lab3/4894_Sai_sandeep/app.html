@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Object Generator</title>
+</head>
+<body>
+    <h1>Generate and Store Objects in IndexedDB</h1>
+    <button id="generate-btn">Generate 1000 Objects</button>
+    <p id="status"></p>
+
+    <script>
+        // Open the IndexedDB database
+        const dbName = "ObjectStoreDB";
+        const request = indexedDB.open(dbName, 1);
+
+        request.onupgradeneeded = function(event) {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains("objects")) {
+                db.createObjectStore("objects", { keyPath: "uuid" });
+            }
+        };
+
+        request.onsuccess = function(event) {
+            const db = event.target.result;
+            document.getElementById('generate-btn').addEventListener('click', () => generateAndStoreObjects(db));
+        };
+
+        request.onerror = function(event) {
+            console.error("Database error: ", event.target.errorCode);
+        };
+
+        // Function to generate UUID
+        function generateUUID() {
+            return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+                (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+            );
+        }
+
+        // Generate and store 1000 objects in IndexedDB
+        function generateAndStoreObjects(db) {
+            const transaction = db.transaction(["objects"], "readwrite");
+            const objectStore = transaction.objectStore("objects");
+            let objects = [];
+
+            for (let i = 0; i < 1000; i++) {
+                const obj = {
+                    uuid: generateUUID(),
+                    source_db: "IndexedDB",
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    attribute1: "Sample Attribute 1",
+                    attribute2: "Sample Attribute 2",
+                    attribute3: "Sample Attribute 3"
+                };
+                objects.push(obj);
+                objectStore.add(obj);
+            }
+
+            transaction.oncomplete = function() {
+                document.getElementById('status').innerText = "1000 objects successfully added to IndexedDB.";
+                console.log("1000 objects added to IndexedDB.");
+            };
+
+            transaction.onerror = function(event) {
+                console.error("Transaction error: ", event.target.errorCode);
+            };
+        }
+    </script>
+</body>
+</html>
