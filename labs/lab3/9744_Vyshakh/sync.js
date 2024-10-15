@@ -2,8 +2,9 @@ const express = require('express');
 const path = require('path');
 const MongoClient = require('mongodb').MongoClient;
 const { v4: uuidv4 } = require('uuid');
-const bodyParser = require('body-parser'); 
+const bodyParser = require('body-parser');
 
+var jsonParser = bodyParser.json();
 
 function generateTasks(num) {
     let tasks = [];
@@ -54,16 +55,16 @@ async function run() {
 }
 run().catch(console.dir);
 
-app.post('/sync', async(req, res) => {
-    let data = req.body;
+app.post('/sync', jsonParser , async(req, res) => {
+    await client.connect();
+    let data = req.body.data;
     console.log(data);
     const database = client.db(dbName);
     const col = database.collection(collectionName);
     console.log(data);
     await  col.insertMany(data);
     console.log(await col.countDocuments());
-    
-    res.send('Data received');
+    res.send({"status":"Saved"});
 });
 
 
