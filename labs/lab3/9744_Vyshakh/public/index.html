@@ -58,57 +58,55 @@
         }
 
         async function syncIndexedToMongo() {
-    const dbRequest = indexedDB.open('lab3', 2);
+            const dbRequest = indexedDB.open('lab3', 2);
 
-    dbRequest.onsuccess = (event) => {
-        const db = event.target.result;
-        const transaction = db.transaction(['9744Operations'], 'readonly');
-        const objectStore = transaction.objectStore('9744Operations');
-        const getRequest = objectStore.getAll();
+            dbRequest.onsuccess = (event) => {
+                const db = event.target.result;
+                const transaction = db.transaction(['9744Operations'], 'readonly');
+                const objectStore = transaction.objectStore('9744Operations');
+                const getRequest = objectStore.getAll();
 
-        getRequest.onsuccess = async (event) => {
-            const data = event.target.result;
-            console.log('Data retrieved from IndexedDB:', data); // Log data to verify
+                getRequest.onsuccess = async (event) => {
+                    let data = event.target.result.slice(0,100);
+                    let dataObject = {"data":data};
+                    console.log('Data retrieved from IndexedDB:', dataObject); // Log data to verify
+                    if (Array.isArray(data) && data.length > 0) {
+                        try {
+                            const response = await fetch('/sync', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify(dataObject),
+                            });
 
-            if (Array.isArray(data) && data.length > 0) {
-                try {
-                    const response = await fetch('/sync', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(data),
-                    });
+                            if (!response.ok) {
+                                const errorText = await response.text(); // Get error details
+                                throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
+                            }
 
-                    if (!response.ok) {
-                        const errorText = await response.text(); // Get error details
-                        throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
+                            const result = await response.json();
+                            console.log('Data synced to MongoDB:', result);
+                            document.getElementById('status').innerText = 'Data successfully synced to MongoDB!';
+                        } catch (error) {
+                            console.error('Error syncing data:', error);
+                            document.getElementById('status').innerText = 'Failed to sync data to MongoDB.';
+                        }
+                    } else {
+                        console.error('No valid data found in IndexedDB');
+                        document.getElementById('status').innerText = 'No valid data found to sync.';
                     }
+                };
 
-                    const result = await response.json();
-                    console.log('Data synced to MongoDB:', result);
-                    document.getElementById('status').innerText = 'Data successfully synced to MongoDB!';
-                } catch (error) {
-                    console.error('Error syncing data:', error);
-                    document.getElementById('status').innerText = 'Failed to sync data to MongoDB.';
-                }
-            } else {
-                console.error('No valid data found in IndexedDB');
-                document.getElementById('status').innerText = 'No valid data found to sync.';
-            }
-        };
+                getRequest.onerror = (event) => {
+                    console.error('Failed to retrieve data from IndexedDB:', event.target.error);
+                };
+            };
 
-        getRequest.onerror = (event) => {
-            console.error('Failed to retrieve data from IndexedDB:', event.target.error);
-        };
-    };
-
-    dbRequest.onerror = (event) => {
-        console.error('Database error:', event.target.error);
-    };
-}
-
-   
+            dbRequest.onerror = (event) => {
+                console.error('Database error:', event.target.error);
+            };
+        }
         async function syncMongoToIndexedDB() {
             try {
                 // Fetch data from MongoDB
@@ -145,7 +143,6 @@
                 document.getElementById('status').innerText = 'Failed to sync data from MongoDB.';
             }
         }
-
     document.getElementById('store').addEventListener('click',storeObjects);
     document.getElementById('fetch').addEventListener('click', syncMongoToIndexedDB);
     document.getElementById('sync').addEventListener('click', syncIndexedToMongo);
