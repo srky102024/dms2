@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB Sync Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        button {
+            margin: 5px;
+        }
+        #status, #queryResult {
+            margin-top: 20px;
+            white-space: pre-wrap; /* Preserve formatting for JSON */
+        }
+    </style>
+</head>
+<body>
+    <h1>IndexedDB Object Generator</h1>
+    <button id="generate">Generate 1000 Objects</button>
+    <button id="sync">Sync to MongoDB</button>
+    <button id="query">Query IndexedDB Entries in MongoDB</button>
+    <div id="status"></div>
+    <div id="queryResult"></div>
+
+    <script>
+        // IndexedDB setup
+        const dbName = "ObjectDatabase";
+        const request = indexedDB.open(dbName, 1);
+
+        request.onupgradeneeded = function(event) {
+            const db = event.target.result;
+            db.createObjectStore("objects", { keyPath: "uuid" });
+        };
+
+        // Generate 1000 objects and store them in IndexedDB
+        document.getElementById("generate").addEventListener("click", () => {
+            const transaction = request.result.transaction(["objects"], "readwrite");
+            const objectStore = transaction.objectStore("objects");
+            const promises = [];
+
+            for (let i = 0; i < 1000; i++) {
+                const uuid = crypto.randomUUID();
+                const now = new Date();
+
+                const obj = {
+                    uuid: uuid,
+                    source_db: "IndexedDB",
+                    created_at: now.toISOString(),
+                    updated_at: now.toISOString(),
+                    attribute_1: `Value_${i}_1`,
+                    attribute_2: `Value_${i}_2`,
+                    attribute_3: `Value_${i}_3`
+                };
+
+                promises.push(objectStore.add(obj));
+            }
+
+            Promise.all(promises).then(() => {
+                console.log("Generated 1000 objects in IndexedDB.");
+                document.getElementById("status").textContent = "Generated 1000 objects in IndexedDB.";
+            }).catch((error) => {
+                console.error("Error generating objects:", error);
+                document.getElementById("status").textContent = "Error generating objects.";
+            });
+        });
+
+        // Sync IndexedDB to MongoDB via NodeJS API
+        document.getElementById("sync").addEventListener("click", () => {
+            const transaction = request.result.transaction(["objects"], "readonly");
+            const objectStore = transaction.objectStore("objects");
+
+            const objects = [];
+            const cursor = objectStore.openCursor();
+            cursor.onsuccess = function(event) {
+                const result = event.target.result;
+                if (result) {
+                    objects.push(result.value);
+                    result.continue();
+                } else {
+                    // Send data to NodeJS server
+                    fetch("http://localhost:3000/insert", { // Update to match the insert endpoint
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(objects)
+                    })
+                    .then(response => response.text())
+                    .then(data => {
+                        console.log(data);
+                        document.getElementById("status").textContent = "Synced data to MongoDB successfully.";
+                    })
+                    .catch(error => {
+                        console.error("Error syncing data:", error);
+                        document.getElementById("status").textContent = "Error syncing data.";
+                    });
+                }
+            };
+        });
+
+        // Query IndexedDB entries in MongoDB
+        document.getElementById("query").addEventListener("click", async () => {
+            try {
+                const response = await fetch("http://localhost:3000/query", {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById("queryResult").textContent = JSON.stringify(data, null, 2);
+                } else {
+                    document.getElementById("queryResult").textContent = "Failed to query data.";
+                }
+            } catch (error) {
+                console.error("Error querying data:", error);
+                document.getElementById("queryResult").textContent = "Error querying data.";
+            }
+        });
+    </script>
+</body>
+</html>
