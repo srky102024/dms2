@@ -1,0 +1,279 @@
+updated -- dashbaord.html with the complete function 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Status Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        svg {
+            background-color: white;
+            border: 1px solid #ccc;
+            margin-top: 20px;
+        }
+
+        .axis-label {
+            font-size: 12px;
+            fill: #666;
+        }
+
+        .bar-label {
+            font-size: 14px;
+            fill: #333;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #status {
+            color: #666;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Task Status Dashboard</h1>
+        <button id="generateData">Generate Sample Data (1000 items)</button>
+        <p id="status"></p>
+    </div>
+
+    <div class="chart-container">
+        <h2>Task Status Overview</h2>
+        <svg id="statusChart" width="600" height="400">
+            <!-- X Axis -->
+            <line x1="50" y1="350" x2="550" y2="350" stroke="black"/>
+            <!-- Y Axis -->
+            <line x1="50" y1="50" x2="50" y2="350" stroke="black"/>
+        </svg>
+    </div>
+
+    <script>
+        let db;
+
+        // Open IndexedDB
+        const request = indexedDB.open("Database_5740", 1);
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            const objectStore = db.createObjectStore("objects", { keyPath: "uuid" });
+            console.log("Database setup complete.");
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            console.log("Database opened successfully.");
+            loadIndexedDBData(); // Load data when database opens
+        };
+
+        request.onerror = function(event) {
+            console.error("Error opening database:", event.target.errorCode);
+        };
+
+        // Generate and store 1000 objects
+        function generateData() {
+            if (!db) {
+                console.error("Database not initialized.");
+                return;
+            }
+
+            const transaction = db.transaction("objects", "readwrite");
+            const objectStore = transaction.objectStore("objects");
+            
+            // Clear existing data
+            objectStore.clear();
+
+            const statuses = ["value1", "value2", "value3"]; // Representing different statuses
+            
+            for (let i = 0; i < 1000; i++) {
+                const obj = {
+                    uuid: crypto.randomUUID(),
+                    source: "IndexedDB",
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    attr1: statuses[Math.floor(Math.random() * statuses.length)], // Randomly assign status
+                    attr2: "value2",
+                    attr3: "value3"
+                };
+
+                objectStore.add(obj);
+            }
+
+            transaction.oncomplete = function() {
+                document.getElementById("status").innerText = "1000 objects stored successfully!";
+                loadIndexedDBData(); // Refresh the chart after adding data
+            };
+
+            transaction.onerror = function() {
+                console.error("Transaction failed.");
+            };
+        }
+
+        // Load and display data
+        function loadIndexedDBData() {
+            const transaction = db.transaction("objects", "readonly");
+            const objectStore = transaction.objectStore("objects");
+            const request = objectStore.getAll();
+
+            request.onsuccess = function(event) {
+                const allData = event.target.result;
+                const taskData = processTaskData(allData);
+                generateBarChart(taskData);
+            };
+        }
+
+        // Process the data for visualization
+        function processTaskData(data) {
+            const statusCount = {
+                "Completed": 0,
+                "In Progress": 0,
+                "Pending": 0
+            };
+
+            data.forEach(item => {
+                if (item.attr1 === "value1") {
+                    statusCount["Completed"]++;
+                } else if (item.attr1 === "value2") {
+                    statusCount["In Progress"]++;
+                } else {
+                    statusCount["Pending"]++;
+                }
+            });
+
+            return [
+                { status: "Completed", count: statusCount["Completed"], color: "#4CAF50" },
+                { status: "In Progress", count: statusCount["In Progress"], color: "#FFA500" },
+                { status: "Pending", count: statusCount["Pending"], color: "#808080" }
+            ];
+        }
+
+        // Generate the bar chart
+        function generateBarChart(taskData) {
+            const svg = document.getElementById('statusChart');
+            
+            // Clear existing content
+            svg.innerHTML = '';
+
+            // Chart dimensions
+            const chartHeight = 350;
+            const chartWidth = 550;
+            const margin = { top: 50, right: 50, bottom: 50, left: 50 };
+
+            // Add axes
+            svg.innerHTML += `
+                <line x1="${margin.left}" y1="${chartHeight - margin.bottom}" 
+                      x2="${chartWidth - margin.right}" y2="${chartHeight - margin.bottom}" 
+                      stroke="black"/>
+                <line x1="${margin.left}" y1="${margin.top}" 
+                      x2="${margin.left}" y2="${chartHeight - margin.bottom}" 
+                      stroke="black"/>
+            `;
+
+            const barWidth = 80;
+            const barSpacing = 120;
+            const startX = margin.left + 40;
+            const maxTaskCount = Math.max(...taskData.map(task => task.count));
+
+            // Create bars and labels
+            taskData.forEach((task, index) => {
+                const barHeight = ((task.count / maxTaskCount) * (chartHeight - margin.top - margin.bottom)) * 0.9;
+                const x = startX + index * barSpacing;
+                const y = chartHeight - margin.bottom - barHeight;
+
+                // Bar
+                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                rect.setAttribute("x", x);
+                rect.setAttribute("y", y);
+                rect.setAttribute("width", barWidth);
+                rect.setAttribute("height", barHeight);
+                rect.setAttribute("fill", task.color);
+                svg.appendChild(rect);
+
+                // Status label
+                const statusLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                statusLabel.setAttribute("x", x + barWidth/2);
+                statusLabel.setAttribute("y", chartHeight - margin.bottom + 20);
+                statusLabel.setAttribute("text-anchor", "middle");
+                statusLabel.setAttribute("class", "bar-label");
+                statusLabel.textContent = task.status;
+                svg.appendChild(statusLabel);
+
+                // Count label
+                const countLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                countLabel.setAttribute("x", x + barWidth/2);
+                countLabel.setAttribute("y", y - 10);
+                countLabel.setAttribute("text-anchor", "middle");
+                countLabel.setAttribute("class", "bar-label");
+                countLabel.textContent = task.count;
+                svg.appendChild(countLabel);
+            });
+
+            // Y-axis labels
+            for (let i = 0; i <= maxTaskCount; i += Math.ceil(maxTaskCount/5)) {
+                const yLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                yLabel.setAttribute("x", margin.left - 10);
+                yLabel.setAttribute("y", chartHeight - margin.bottom - (i / maxTaskCount) * (chartHeight - margin.top - margin.bottom) * 0.9);
+                yLabel.setAttribute("text-anchor", "end");
+                yLabel.setAttribute("class", "axis-label");
+                yLabel.setAttribute("dominant-baseline", "middle");
+                yLabel.textContent = i;
+                svg.appendChild(yLabel);
+            }
+
+            // Axis titles
+            const xAxisLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            xAxisLabel.setAttribute("x", chartWidth/2);
+            xAxisLabel.setAttribute("y", chartHeight - 10);
+            xAxisLabel.setAttribute("text-anchor", "middle");
+            xAxisLabel.setAttribute("class", "axis-label");
+            xAxisLabel.textContent = "Task Status";
+            svg.appendChild(xAxisLabel);
+
+            const yAxisLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            yAxisLabel.setAttribute("x", -chartHeight/2);
+            yAxisLabel.setAttribute("y", 20);
+            yAxisLabel.setAttribute("text-anchor", "middle");
+            yAxisLabel.setAttribute("transform", "rotate(-90)");
+            yAxisLabel.setAttribute("class", "axis-label");
+            yAxisLabel.textContent = "Number of Tasks";
+            svg.appendChild(yAxisLabel);
+        }
+
+        // Add event listener for generate data button
+        document.getElementById("generateData").addEventListener("click", generateData);
+    </script>
+</body>
+</html>
