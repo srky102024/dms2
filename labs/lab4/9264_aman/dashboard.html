@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Status Chart Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+
+        .chart-container {
+            text-align: center;
+        }
+
+        svg {
+            background-color: white;
+            border: 1px solid #ccc;
+        }
+
+        .axis-label {
+            font-size: 12px;
+            fill: #666;
+        }
+
+        .bar-label {
+            font-size: 14px;
+            fill: #333;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+    </style>
+
+    <!-- Add the Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <!-- Canvas for the Chart.js bar chart -->
+    <div>
+        <h2>Bar Chart of To-Do Items</h2>
+        <canvas id="myChart" width="400" height="200"></canvas> 
+    </div>
+
+    <div class="chart-container">
+        <h1>Task Status Overview</h1>
+        <svg id="statusChart" width="400" height="300">
+            <!-- X Axis -->
+            <line x1="50" y1="250" x2="350" y2="250" stroke="black"/>
+            <!-- Y Axis -->
+            <line x1="50" y1="50" x2="50" y2="250" stroke="black"/>
+        </svg>
+    </div>
+
+    <script>
+        // Set up IndexedDB
+        let db;
+        const request = indexedDB.open('todoListDB', 1); // Open the database
+
+        request.onerror = function(event) {
+            console.error("Database error:", event.target.errorCode); 
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result; // Store the result
+            console.log("Database initialized."); // Confirm database connection
+            insertToDoItems(); // Insert data once the database is set up
+        };
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            let objectStore = db.createObjectStore('toDoItems', { keyPath: '_id' }); // Create an object store
+            objectStore.createIndex('source_db', 'source_db', { unique: false });
+            objectStore.createIndex('created_at', 'created_at', { unique: false });
+            objectStore.createIndex('updated_at', 'updated_at', { unique: false });
+            objectStore.createIndex('attr1', 'attr1', { unique: false });
+            objectStore.createIndex('attr2', 'attr2', { unique: false });
+            objectStore.createIndex('attr3', 'attr3', { unique: false });
+        };
+
+        // Insert 1000 items into IndexedDB and update the chart after insertion
+        function insertToDoItems() {
+            let transaction = db.transaction(['toDoItems'], 'readwrite'); 
+            let objectStore = transaction.objectStore('toDoItems'); 
+
+            // Loop to create 1000 items
+            for (let i = 0; i < 1000; i++) {
+                let item = {
+                    _id: 'id_' + i,  
+                    source_db: 'IndexedDB',
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    attr1: 'value1_' + i,
+                    attr2: 'value2_' + i,
+                    attr3: 'value3_' + i
+                };
+                objectStore.add(item); 
+            }
+            console.log("1000 items inserted into IndexedDB.");
+
+            // Call the fetch function after the data is inserted
+            fetchToDoItemsAndUpdateChart();
+        }
+
+        function fetchToDoItemsAndUpdateChart() {
+            let transaction = db.transaction(['toDoItems'], 'readonly');
+            let objectStore = transaction.objectStore('toDoItems');
+            let request = objectStore.getAll();
+
+            request.onsuccess = function(event) {
+                let items = event.target.result;
+
+                // Check if the data is fetched correctly
+                console.log("Items fetched from IndexedDB:", items);  
+
+                let labels = ['To-Do Items'];
+                let data = [items.length]; 
+
+                updateBarChart(labels, data); 
+            };
+        }
+
+        // Chart.js example to render the bar chart
+        function updateBarChart(labels, data) {
+            var ctx = document.getElementById('myChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'To-Do Items',
+                        data: data,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // JSON data representing task statuses
+        const taskData = [
+            { status: "Completed", count: 120, color: "green" },
+            { status: "In Progress", count: 80, color: "orange" },
+            { status: "Other", count: 50, color: "gray" }
+        ];
+
+        // Get the SVG element
+        const svg = document.getElementById('statusChart');
+
+        // Chart dimensions and settings
+        const chartHeight = 250;
+        const barWidth = 50;
+        const barSpacing = 80;
+        const startX = 80;
+        const maxTaskCount = Math.max(...taskData.map(task => task.count));
+
+        // Generate bars 
+        taskData.forEach((task, index) => {
+            const barHeight = (task.count / maxTaskCount) * 200;
+
+            // Create a rectangle (bar)
+            const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rect.setAttribute("x", startX + index * barSpacing);
+            rect.setAttribute("y", chartHeight - barHeight);
+            rect.setAttribute("width", barWidth);
+            rect.setAttribute("height", barHeight);
+            rect.setAttribute("fill", task.color);
+            svg.appendChild(rect);
+
+            // Add label under each bar (status)
+            const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            label.setAttribute("x", startX + index * barSpacing + 10);
+            label.setAttribute("y", chartHeight + 20);
+            label.setAttribute("class", "bar-label");
+            label.textContent = task.status;
+            svg.appendChild(label);
+
+            // Add count on top of each bar
+            const countLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            countLabel.setAttribute("x", startX + index * barSpacing + 15);
+            countLabel.setAttribute("y", chartHeight - barHeight - 10);
+            countLabel.setAttribute("class", "bar-label");
+            countLabel.textContent = task.count;
+            svg.appendChild(countLabel);
+        });
+
+        // Y Axis Labels (for example: 0, 50, 100, 150, 200)
+        for (let i = 0; i <= maxTaskCount; i += 50) {
+            const yLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            yLabel.setAttribute("x", 20);
+            yLabel.setAttribute("y", chartHeight - (i / maxTaskCount) * 200);
+            yLabel.setAttribute("class", "axis-label");
+            yLabel.textContent = i;
+            svg.appendChild(yLabel);
+        }
+
+        // X Axis Label (Task Status)
+        const xAxisLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        xAxisLabel.setAttribute("x", 180);
+        xAxisLabel.setAttribute("y", 290);
+        xAxisLabel.setAttribute("class", "axis-label");
+        xAxisLabel.textContent = "Task Status";
+        svg.appendChild(xAxisLabel);
+
+        // Y Axis Label (Number of Tasks)
+        const yAxisLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        yAxisLabel.setAttribute("x", 10);
+        yAxisLabel.setAttribute("y", 30);
+        yAxisLabel.setAttribute("class", "axis-label");
+        yAxisLabel.setAttribute("transform", "rotate(-90 20,100)");
+        yAxisLabel.textContent = "Number of Tasks";
+        svg.appendChild(yAxisLabel);
+    </script>
+
+</body>
+</html>
+
