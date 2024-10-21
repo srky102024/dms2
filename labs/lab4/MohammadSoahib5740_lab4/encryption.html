@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encryption/Decryption Performance</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        input, textarea { width: 100%; padding: 8px; margin-bottom: 10px; }
+        button { padding: 10px 15px; }
+    </style>
+</head>
+<body>
+
+<h2>Encrypt/Decrypt To-Do Items</h2>
+
+<!-- Input for a single task -->
+<label for="taskInput">Enter a single task:</label>
+<input type="text" id="taskInput" placeholder="Enter your task" />
+<button onclick="encryptAndStoreData()">Encrypt & Store</button>
+
+<!-- Input for multiple tasks -->
+<label for="taskList">Or enter multiple tasks (one per line):</label>
+<textarea id="taskList" rows="5" placeholder="Enter tasks, one per line"></textarea>
+<button onclick="encryptAndStoreMultiple()">Encrypt & Store Multiple</button>
+
+<!-- Button to read and decrypt tasks -->
+<button onclick="readAndDecryptData()">Read & Decrypt</button>
+
+<!-- Display timing and results -->
+<p><strong>Encryption Time:</strong> <span id="encryptionTime"></span> ms</p>
+<p><strong>Decryption Time:</strong> <span id="decryptionTime"></span> ms</p>
+
+<p><strong>Encrypted Data:</strong> <span id="encryptedData"></span></p>
+<p><strong>Decrypted Data:</strong> <span id="decryptedData"></span></p>
+
+<script>
+    let encryptedArray = null;
+    let key = null;
+    let iv = null;
+    let db;
+
+    // Open IndexedDB
+    const request = indexedDB.open("Database_5740", 2); // Incremented version number
+
+    request.onupgradeneeded = function(event) {
+        db = event.target.result;
+        // Check if the object store already exists before creating it
+        if (!db.objectStoreNames.contains("tasks")) {
+            const objectStore = db.createObjectStore("tasks", { keyPath: "uuid" });
+            console.log("Database setup complete.");
+        }
+    };
+
+    request.onsuccess = function(event) {
+        db = event.target.result;
+        console.log("Database opened successfully.");
+    };
+
+    request.onerror = function(event) {
+        console.error("Error opening the database:", event.target.errorCode);
+    };
+
+    // Generate a cryptographic key
+    async function generateKey() {
+        key = await crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+        );
+        iv = crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
+    }
+
+    // Encrypt and store a single task
+    async function encryptAndStoreData() {
+        const taskInput = document.getElementById('taskInput').value;
+        if (!taskInput) {
+            alert("Please enter a task.");
+            return;
+        }
+
+        if (!key) await generateKey();
+
+        const encoder = new TextEncoder();
+        const encodedData = encoder.encode(taskInput);
+
+        const startEncryption = performance.now();  // Start measuring encryption time
+
+        encryptedArray = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv },
+            key,
+            encodedData
+        );
+
+        const endEncryption = performance.now();  // End measuring encryption time
+        document.getElementById('encryptionTime').textContent = (endEncryption - startEncryption).toFixed(2);
+
+        // Store the encrypted data in IndexedDB
+        const transaction = db.transaction("tasks", "readwrite");
+        const objectStore = transaction.objectStore("tasks");
+
+        const taskObject = {
+            uuid: crypto.randomUUID(),
+            encryptedData: new Uint8Array(encryptedArray),
+            iv: Array.from(iv) // Store IV as an array for retrieval
+        };
+
+        const request = objectStore.add(taskObject);
+        request.onsuccess = function() {
+            document.getElementById('encryptedData').textContent = taskObject.encryptedData.toString();
+            console.log("Task stored successfully:", taskObject.uuid);
+        };
+        request.onerror = function() {
+            console.error("Error storing task:", request.error);
+        };
+    }
+
+    // Encrypt and store multiple tasks
+    async function encryptAndStoreMultiple() {
+        const taskList = document.getElementById('taskList').value.trim();
+        const tasks = taskList.split('\n').filter(task => task.trim() !== '');
+
+        if (tasks.length === 0) {
+            alert("Please enter at least one task.");
+            return;
+        }
+
+        if (!key) await generateKey();
+
+        const transaction = db.transaction("tasks", "readwrite");
+        const objectStore = transaction.objectStore("tasks");
+
+        for (let task of tasks) {
+            const encoder = new TextEncoder();
+            const encodedData = encoder.encode(task);
+            const iv = crypto.getRandomValues(new Uint8Array(12)); // New IV for each task
+
+            const startEncryption = performance.now();  // Start measuring encryption time
+
+            const encryptedArray = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                key,
+                encodedData
+            );
+
+            const endEncryption = performance.now();  // End measuring encryption time
+            document.getElementById('encryptionTime').textContent = (endEncryption - startEncryption).toFixed(2);
+
+            const taskObject = {
+                uuid: crypto.randomUUID(),
+                encryptedData: new Uint8Array(encryptedArray),
+                iv: Array.from(iv) // Store IV as an array for retrieval
+            };
+
+            const request = objectStore.add(taskObject);
+            request.onsuccess = function() {
+                console.log("Task stored successfully:", taskObject.uuid);
+            };
+            request.onerror = function() {
+                console.error("Error storing task:", request.error);
+            };
+        }
+
+        transaction.oncomplete = function() {
+            document.getElementById('encryptedData').textContent = "Multiple tasks stored successfully!";
+        };
+
+        transaction.onerror = function() {
+            console.error("Transaction failed.");
+        };
+    }
+
+    // Read and decrypt the data
+    async function readAndDecryptData() {
+        const transaction = db.transaction("tasks", "readonly");
+        const objectStore = transaction.objectStore("tasks");
+        const request = objectStore.getAll();
+
+        request.onsuccess = async function(event) {
+            const allTasks = event.target.result;
+            const startDecryption = performance.now();  // Start measuring decryption time
+
+            let decryptedResults = [];
+
+            for (let task of allTasks) {
+                try {
+                    const decryptedArrayBuffer = await crypto.subtle.decrypt(
+                        { name: "AES-GCM", iv: new Uint8Array(task.iv) }, // Ensure IV is in correct format
+                        key,
+                        task.encryptedData // This should be an ArrayBuffer
+                    );
+
+                    const decoder = new TextDecoder();
+                    decryptedResults.push(decoder.decode(decryptedArrayBuffer));
+                } catch (error) {
+                    console.error("Decryption failed for task UUID:", task.uuid, "Error:", error);
+                }
+            }
+
+            const endDecryption = performance.now();  // End measuring decryption time
+            document.getElementById('decryptionTime').textContent = (endDecryption - startDecryption).toFixed(2);
+            document.getElementById('decryptedData').textContent = decryptedResults.join(", ");
+        };
+
+        request.onerror = function() {
+            console.error("Error reading tasks:", request.error);
+        };
+    }
+</script>
+
+</body>
+</html>
