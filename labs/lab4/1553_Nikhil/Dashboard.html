@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Chart.js via CDN -->
+
+  <style>
+    /* General styling */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f3f6f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .dashboard {
+      width: 100%;
+      max-width: 1000px;
+      background-color: white;
+      border-radius: 15px;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+      padding: 30px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    header h1 {
+      font-size: 2.8rem;
+      color: #4CAF50;
+      letter-spacing: 1px;
+    }
+
+    header p {
+      font-size: 1.2rem;
+      color: #666;
+      margin-top: 10px;
+    }
+
+    .chart-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 0;
+      margin-top: 20px;
+    }
+
+    .chart-container {
+      width: 100%;
+    }
+
+    .chart-container h2 {
+      text-align: center;
+      font-size: 1.8rem;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    canvas {
+      display: block;
+      margin: 0 auto;
+      max-width: 100%;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 20px;
+      color: #777;
+      font-size: 0.9rem;
+    }
+    
+    /* Responsive tweaks */
+    @media (max-width: 768px) {
+      header h1 {
+        font-size: 2rem;
+      }
+
+      .chart-container h2 {
+        font-size: 1.4rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <header>
+      <h1>Task Completion Dashboard</h1>
+      <p>An overview of tasks: completed vs pending</p>
+    </header>
+
+    <div class="chart-section">
+      <div class="chart-container">
+        <h2>Task Status Breakdown</h2>
+        <canvas id="taskChart"></canvas>
+      </div>
+    </div>
+
+    <footer>
+      <p>Data fetched from IndexedDB | Task Dashboard</p>
+    </footer>
+  </div>
+
+  <script>
+    const dbName = "TaskDatabase";
+    const storeName = "tasksStore";
+    const taskLimit = 1000;
+
+    // Setup IndexedDB and populate with sample task data
+    let dbRequest = indexedDB.open(dbName, 1);
+
+    dbRequest.onupgradeneeded = function(event) {
+      let db = event.target.result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        let store = db.createObjectStore(storeName, { keyPath: "id", autoIncrement: true });
+        store.createIndex("status", "status", { unique: false });
+      }
+    };
+
+    dbRequest.onsuccess = function(event) {
+      let db = event.target.result;
+      let transaction = db.transaction(storeName, "readwrite");
+      let store = transaction.objectStore(storeName);
+
+      for (let i = 0; i < taskLimit; i++) {
+        let task = {
+          name: `Task ${i + 1}`,
+          status: Math.random() > 0.5 ? "Complete" : "Pending"
+        };
+        store.add(task);
+      }
+
+      transaction.oncomplete = function() {
+        console.log(`Inserted ${taskLimit} tasks into IndexedDB.`);
+        fetchChartData();  // Fetch chart data after task insertion
+      };
+    };
+
+    dbRequest.onerror = function() {
+      console.error("Failed to open the database.");
+    };
+
+    // Fetch data from IndexedDB and update the chart
+    function fetchChartData() {
+      let completedTasks = 0;
+      let pendingTasks = 0;
+
+      let dbRequest = indexedDB.open(dbName, 1);
+      dbRequest.onsuccess = function(event) {
+        let db = event.target.result;
+        let transaction = db.transaction(storeName, "readonly");
+        let store = transaction.objectStore(storeName);
+
+        let cursorRequest = store.openCursor();
+        cursorRequest.onsuccess = function(event) {
+          let cursor = event.target.result;
+          if (cursor) {
+            if (cursor.value.status === "Complete") {
+              completedTasks++;
+            } else {
+              pendingTasks++;
+            }
+            cursor.continue();
+          } else {
+            // Once all data is retrieved, update the chart
+            updateChart(completedTasks, pendingTasks);
+          }
+        };
+      };
+    }
+
+    // Update the chart using Chart.js
+    function updateChart(completed, pending) {
+      let ctx = document.getElementById('taskChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Completed Tasks', 'Pending Tasks'],
+          datasets: [{
+            label: 'Task Status',
+            data: [completed, pending],
+            backgroundColor: ['#4CAF50', '#FF9800'],
+            borderColor: ['#388E3C', '#FB8C00'],
+            borderWidth: 1,
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color: '#555',
+                font: { size: 14 }
+              },
+              grid: { color: '#e5e5e5' }
+            },
+            x: {
+              ticks: {
+                color: '#555',
+                font: { size: 14 }
+              },
+              grid: { color: '#e5e5e5' }
+            }
+          },
+          plugins: {
+            legend: {
+              display: false,
+              labels: { color: '#333', font: { size: 16 } }
+            }
+          }
+        }
+      });
+    }
+
+    window.onload = function() {
+      setTimeout(fetchChartData, 500);
+    };
+  </script>
+</body>
+</html>
