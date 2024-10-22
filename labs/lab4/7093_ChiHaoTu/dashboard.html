@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dynamic Status Chart Example</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f4f4f4;
+      }
+
+      .chart-container {
+        text-align: center;
+      }
+
+      svg {
+        background-color: white;
+        border: 1px solid #ccc;
+      }
+
+      .axis-label {
+        font-size: 12px;
+        fill: #666;
+      }
+
+      .bar-label {
+        font-size: 14px;
+        fill: #333;
+      }
+
+      h1 {
+        font-size: 24px;
+        margin-bottom: 20px;
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chart-container">
+      <h1>Task Status Overview</h1>
+      <svg id="statusChart" width="400" height="300">
+        <!-- X Axis -->
+        <line x1="50" y1="250" x2="350" y2="250" stroke="black" />
+        <!-- Y Axis -->
+        <line x1="50" y1="50" x2="50" y2="250" stroke="black" />
+      </svg>
+    </div>
+
+    <script>
+      const status = ["Completed", "In Progress", "Other"];
+      const random_tasks = [
+        "Task 1",
+        "Task 2",
+        "Task 3",
+        "Task 4",
+        "Task 5",
+        "Task 6",
+        "Task 7",
+        "Task 8",
+        "Task 9",
+        "Task 10",
+      ];
+      const generateRandomData = () => {
+        const status_idx = Math.floor(Math.random() * status.length);
+        const task_idx = Math.floor(Math.random() * random_tasks.length);
+        let data = {
+          task: random_tasks[task_idx],
+          status: status[status_idx],
+        };
+        return data;
+      };
+
+      // Setup IndexedDB
+      let request = indexedDB.open("lab_4", 1);
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains("todo_list")) {
+          const objectStore = db.createObjectStore("todo_list", {
+            keyPath: "id",
+            autoIncrement: true,
+          });
+          objectStore.createIndex("status", "status", { unique: false });
+        }
+      };
+
+      request.onerror = (event) => {
+        console.log("Error setting up IndexedDB");
+      };
+
+      let getTotal_completed = 0;
+      let getTotal_in_progress = 0;
+      let getTotal_other = 0;
+
+      request.onsuccess = (event) => {
+        const db = event.target.result;
+        const transaction = db.transaction("todo_list", "readwrite");
+        const objectStore = transaction.objectStore("todo_list");
+
+        const countRequest = objectStore.count();
+        countRequest.onsuccess = (event) => {
+          if (event.target.result === 0) {
+            for (let i = 0; i < 1000; i++) {
+              const data = generateRandomData();
+              const addRequest = objectStore.add(data);
+              addRequest.onsuccess = () => {
+                console.log("Data added successfully");
+              };
+              addRequest.onerror = () => {
+                console.log("Error adding data");
+              };
+            }
+          } else {
+            console.log("Data already exists");
+          }
+
+          const cursorRequest = objectStore.openCursor();
+          cursorRequest.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (cursor) {
+              if (cursor.value.status === "Completed") {
+                getTotal_completed++;
+              } else if (cursor.value.status === "In Progress") {
+                getTotal_in_progress++;
+              } else {
+                getTotal_other++;
+              }
+              cursor.continue();
+            } else {
+              console.log("Data count complete");
+              draw_graph();
+            }
+          };
+        };
+
+        countRequest.onerror = () => {
+          console.log("Error counting data");
+        };
+      };
+
+      const draw_graph = () => {
+        console.log("Total completed tasks: ", getTotal_completed);
+        console.log("Total in progress tasks: ", getTotal_in_progress);
+        console.log("Total other tasks: ", getTotal_other);
+
+        const taskData = [
+          { status: "Completed", count: getTotal_completed, color: "red" },
+          {
+            status: "In Progress",
+            count: getTotal_in_progress,
+            color: "blue",
+          },
+          { status: "Other", count: getTotal_other, color: "pink" },
+        ];
+
+        const svg = document.getElementById("statusChart");
+        const chartHeight = 250;
+        const barWidth = 50;
+        const barSpacing = 80;
+        const startX = 80;
+        const maxTaskCount = Math.max(...taskData.map((task) => task.count));
+
+        taskData.forEach((task, index) => {
+          const barHeight = (task.count / maxTaskCount) * 200;
+
+          const rect = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "rect"
+          );
+          rect.setAttribute("x", startX + index * barSpacing);
+          rect.setAttribute("y", chartHeight - barHeight);
+          rect.setAttribute("width", barWidth);
+          rect.setAttribute("height", barHeight);
+          rect.setAttribute("fill", task.color);
+          svg.appendChild(rect);
+
+          const label = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "text"
+          );
+          label.setAttribute("x", startX + index * barSpacing + 10);
+          label.setAttribute("y", chartHeight + 20);
+          label.setAttribute("class", "bar-label");
+          label.textContent = task.status;
+          svg.appendChild(label);
+
+          const countLabel = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "text"
+          );
+          countLabel.setAttribute("x", startX + index * barSpacing + 15);
+          countLabel.setAttribute("y", chartHeight - barHeight - 10);
+          countLabel.setAttribute("class", "bar-label");
+          countLabel.textContent = task.count;
+          svg.appendChild(countLabel);
+        });
+
+        for (let i = 0; i <= maxTaskCount; i += 50) {
+          const yLabel = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "text"
+          );
+          yLabel.setAttribute("x", 20);
+          yLabel.setAttribute("y", chartHeight - (i / maxTaskCount) * 200);
+          yLabel.setAttribute("class", "axis-label");
+          yLabel.textContent = i;
+          svg.appendChild(yLabel);
+        }
+
+        const xAxisLabel = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "text"
+        );
+        xAxisLabel.setAttribute("x", 180);
+        xAxisLabel.setAttribute("y", 290);
+        xAxisLabel.setAttribute("class", "axis-label");
+        xAxisLabel.textContent = "Task Status";
+        svg.appendChild(xAxisLabel);
+
+        const yAxisLabel = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "text"
+        );
+        yAxisLabel.setAttribute("x", 10);
+        yAxisLabel.setAttribute("y", 30);
+        yAxisLabel.setAttribute("class", "axis-label");
+        yAxisLabel.setAttribute("transform", "rotate(-90 20,100)");
+        yAxisLabel.textContent = "Number of Tasks";
+        svg.appendChild(yAxisLabel);
+      };
+    </script>
+  </body>
+</html>
