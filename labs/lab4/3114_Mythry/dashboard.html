@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .dashboard {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        canvas {
+            max-width: 100%;
+            border-radius: 8px;
+        }
+
+        footer {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .chart-title {
+            font-size: 1.2em;
+            margin-top: 20px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>Todo Dashboard</h1>
+        <div class="chart-title">Task Completion Overview</div>
+        <canvas id="myChart"></canvas>
+    </div>
+    <footer>
+        &copy; 2024 Todo App | <a href="#" style="color: #007BFF; text-decoration: none;">Contact</a>
+    </footer>
+    <script>
+        // Create IndexedDB and add 1,000 todos
+        const dbRequest = indexedDB.open("TodoDB", 1);
+
+        dbRequest.onupgradeneeded = function(event) {
+            const db = event.target.result;
+            db.createObjectStore("todos", { keyPath: "id" });
+        };
+
+        dbRequest.onsuccess = function(event) {
+            const db = event.target.result;
+            const transaction = db.transaction("todos", "readwrite");
+            const objectStore = transaction.objectStore("todos");
+
+            // Add 1,000 todo items
+            for (let i = 1; i <= 1000; i++) {
+                const todoItem = { id: i, task: `Task ${i}`, completed: Math.random() < 0.5 };
+                objectStore.add(todoItem);
+            }
+
+            transaction.oncomplete = function() {
+                console.log("All to-do items added!");
+                fetchTodos(); // Call fetchTodos after adding items
+            };
+
+            transaction.onerror = function(event) {
+                console.error("Transaction error: ", event.target.error);
+            };
+        };
+
+        function fetchTodos() {
+            const db = dbRequest.result;
+            const transaction = db.transaction("todos", "readonly");
+            const objectStore = transaction.objectStore("todos");
+
+            const todos = [];
+            objectStore.openCursor().onsuccess = function(event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    todos.push(cursor.value);
+                    cursor.continue();
+                } else {
+                    updateChart(todos);
+                }
+            };
+        }
+
+        function updateChart(todos) {
+            const completedCount = todos.filter(todo => todo.completed).length;
+            const totalCount = todos.length;
+
+            const ctx = document.getElementById('myChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Completed Tasks', 'Remaining Tasks'],
+                    datasets: [{
+                        label: 'Number of Tasks',
+                        data: [completedCount, totalCount - completedCount],
+                        backgroundColor: ['rgba(75, 192, 192, 0.6)', 'rgba(255, 99, 132, 0.6)'],
+                        borderColor: ['rgba(75, 192, 192, 1)', 'rgba(255, 99, 132, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Tasks',
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Task Completion Overview',
+                            font: {
+                                size: 16
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
