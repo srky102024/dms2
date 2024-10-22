@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Status Overview</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Task Status Overview</h1>
+    <div>
+        <button onclick="generateObjects()">Generate 1000 Objects</button>
+        <button onclick="updateChartData()">Update Chart</button>
+        <button onclick="syncToMongoDB()">Sync to MongoDB</button>
+        <button onclick="queryMongoDB()">Query MongoDB</button>
+    </div>
+    <div>
+        <p>Pending Tasks: <span id="pendingTasks">0</span></p>
+        <p>Completed Tasks: <span id="completedTasks">0</span></p>
+        <p>Total Tasks: <span id="totalTasks">0</span></p>
+    </div>
+    <canvas id="myChart"></canvas>
+
+    <script>
+        let db;
+        const dbName = "TodoListDB";
+        const objectStoreName = "todos";
+
+        function initDB() {
+            const request = indexedDB.open(dbName, 1);
+            request.onerror = (event) => console.error("IndexedDB error:", event.target.error);
+            request.onsuccess = (event) => {
+                db = event.target.result;
+                console.log("Database opened successfully");
+            };
+            request.onupgradeneeded = (event) => {
+                db = event.target.result;
+                const objectStore = db.createObjectStore(objectStoreName, { keyPath: "id", autoIncrement: true });
+                console.log("Object store created");
+            };
+        }
+
+        function generateObjects() {
+            const transaction = db.transaction([objectStoreName], "readwrite");
+            const objectStore = transaction.objectStore(objectStoreName);
+            
+            for (let i = 0; i < 1000; i++) {
+                const todo = {
+                    title: `Task ${i + 1}`,
+                    description: `Description for task ${i + 1}`,
+                    status: Math.random() < 0.5 ? "Pending" : "Completed",
+                    priority: ["Low", "Medium", "High"][Math.floor(Math.random() * 3)],
+                    dueDate: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                };
+                objectStore.add(todo);
+            }
+            console.log("1000 objects generated");
+            updateChartData();
+        }
+
+        function updateChartData() {
+            const transaction = db.transaction([objectStoreName], "readonly");
+            const objectStore = transaction.objectStore(objectStoreName);
+            const countRequest = objectStore.count();
+
+            countRequest.onsuccess = () => {
+                const totalTasks = countRequest.result;
+                let pendingCount = 0;
+                let completedCount = 0;
+
+                objectStore.openCursor().onsuccess = (event) => {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        if (cursor.value.status === "Pending") {
+                            pendingCount++;
+                        } else if (cursor.value.status === "Completed") {
+                            completedCount++;
+                        }
+                        cursor.continue();
+                    } else {
+                        const pendingPercentage = (pendingCount / totalTasks) * 100;
+                        const completedPercentage = (completedCount / totalTasks) * 100;
+
+                        chart.data.datasets[0].data = [pendingPercentage, completedPercentage];
+                        chart.update();
+
+                        document.getElementById('pendingTasks').textContent = pendingCount;
+                        document.getElementById('completedTasks').textContent = completedCount;
+                        document.getElementById('totalTasks').textContent = totalTasks;
+                    }
+                };
+            };
+        }
+
+        function syncToMongoDB() {
+            const transaction = db.transaction([objectStoreName], "readonly");
+            const objectStore = transaction.objectStore(objectStoreName);
+            const getAllRequest = objectStore.getAll();
+
+            getAllRequest.onsuccess = () => {
+                const todos = getAllRequest.result;
+                fetch('/sync', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(todos),
+                })
+                .then(response => response.json())
+                .then(data => console.log('Sync successful:', data))
+                .catch((error) => console.error('Error:', error));
+            };
+        }
+
+        function queryMongoDB() {
+            fetch('/query')
+            .then(response => response.json())
+            .then(data => {
+                console.log('MongoDB query result:', data);
+                // Update chart or display data as needed
+            })
+            .catch((error) => console.error('Error:', error));
+        }
+
+        const ctx = document.getElementById('myChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Pending', 'Completed'],
+                datasets: [{
+                    label: 'Task Status (%)',
+                    data: [0, 0],
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.2)',
+                        'rgba(75, 192, 192, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(75, 192, 192, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+
+        initDB();
+    </script>
+</body>
+</html>
