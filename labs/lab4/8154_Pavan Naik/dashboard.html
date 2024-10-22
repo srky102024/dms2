@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Management Dashboard</title>
+    <link rel="stylesheet" href="style.css"> <!-- External CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Chart.js -->
+</head>
+<body>
+    <div class="container">
+        <!-- Dashboard Header -->
+        <header>
+            <h1>Task Management Dashboard</h1>
+            <p class="sub-header">Track your tasks with real-time data visualization.</p>
+        </header>
+
+        <!-- Summary Section -->
+        <section class="summary">
+            <div class="summary-item">
+                <h2>Total Tasks</h2>
+                <p id="total-tasks">0</p>
+            </div>
+            <div class="summary-item">
+                <h2>Completed Tasks</h2>
+                <p id="completed-tasks">0</p>
+            </div>
+            <div class="summary-item">
+                <h2>Pending Tasks</h2>
+                <p id="incomplete-tasks">0</p>
+            </div>
+        </section>
+
+        <!-- Bar Chart Section -->
+        <section class="chart">
+            <h2>Task Completion Status Overview</h2>
+            <canvas id="myBarChart"></canvas>
+        </section>
+
+        <!-- To-Do List Display -->
+        <section class="todo-list">
+            <h2>Detailed Task List (Ordered)</h2>
+            <ul id="todo-items">
+                <!-- To-Do items will be displayed here -->
+            </ul>
+        </section>
+    </div>
+
+    <script src="app.js"></script> <!-- External JS -->
+</body>
+</html>
