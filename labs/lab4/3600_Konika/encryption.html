@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encryption/Decryption Performance</title>
+</head>
+<body>
+
+<h2>Encrypt/Decrypt To-Do Items</h2>
+<button onclick="encryptData()">Encrypt</button>
+<button onclick="decryptData()">Decrypt</button>
+
+<p><strong>Encryption Time:</strong> <span id="encryptionTime"></span> ms</p>
+<p><strong>Decryption Time:</strong> <span id="decryptionTime"></span> ms</p>
+
+<p><strong>Encrypted Data:</strong> <span id="encryptedData"></span></p>
+<p><strong>Decrypted Data:</strong> <span id="decryptedData"></span></p>
+
+<script>
+    let encryptedArray = null;
+    let key = null;
+    let iv = null;
+    const dbName = "TodoDB";
+    const storeName = "TodoItems";
+    let db;
+
+    const todoItems = Array.from({ length: 1000 }, (_, index) => ({
+        uuid: crypto.randomUUID(),
+        task: `Task ${index + 1}`,
+        status: "completed"
+    }));
+
+    function openDatabase() {
+        const request = indexedDB.open(dbName, 1);
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains(storeName)) {
+                db.createObjectStore(storeName, { keyPath: "uuid" });
+            }
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            console.log("Database opened successfully");
+        };
+
+        request.onerror = function(event) {
+            console.error("Database error: ", event.target.errorCode);
+        };
+    }
+    async function generateKey() {
+        key = await crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+        );
+        iv = crypto.getRandomValues(new Uint8Array(12));
+    }
+    async function encryptData() {
+        if (!key) await generateKey();
+
+        const encoder = new TextEncoder();
+        const encodedData = encoder.encode(JSON.stringify(todoItems));
+
+        const start = performance.now();
+
+        encryptedArray = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv },
+            key,
+            encodedData
+        );
+
+        const end = performance.now();
+        document.getElementById('encryptionTime').textContent = (end - start).toFixed(2);
+
+        document.getElementById('encryptedData').textContent = new Uint8Array(encryptedArray).toString();
+        const transaction = db.transaction(storeName, "readwrite");
+        const store = transaction.objectStore(storeName);
+        store.put({ uuid: crypto.randomUUID(), encryptedTask: encryptedArray });
+
+        transaction.oncomplete = function() {
+            console.log("Data stored in IndexedDB");
+        };
+
+        transaction.onerror = function(event) {
+            console.error("Error storing data: ", event.target.errorCode);
+        };
+    }
+    async function decryptData() {
+        const transaction = db.transaction(storeName, "readonly");
+        const store = transaction.objectStore(storeName);
+        const request = store.getAll();
+
+        request.onsuccess = async function(event) {
+            const allItems = event.target.result;
+            if (allItems.length === 0) {
+                console.log("No encrypted tasks found in the database.");
+                return;
+            }
+
+            const start = performance.now();
+
+            const decryptedTasks = await Promise.all(allItems.map(async item => {
+                const decryptedArrayBuffer = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: iv },
+                    key,
+                    item.encryptedTask
+                );
+                const decoder = new TextDecoder();
+                return decoder.decode(decryptedArrayBuffer);
+            }));
+
+            const end = performance.now();
+            document.getElementById('decryptionTime').textContent = (end - start).toFixed(2);
+
+            document.getElementById('decryptedData').textContent = decryptedTasks.join(", ");
+        };
+
+        request.onerror = function(event) {
+            console.error("Error retrieving data: ", event.target.errorCode);
+        };
+    }
+    document.addEventListener('DOMContentLoaded', openDatabase);
+</script>
+
+</body>
+</html>
