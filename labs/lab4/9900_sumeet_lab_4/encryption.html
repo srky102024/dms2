@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Encryption/Decryption Performance</title>
+  </head>
+  <body>
+    <h2>Setup IndexedDB</h2>
+    <button onclick="setup_index_db()">Setup IndexedDB</button>
+    <h2>Add encrypted data to indexedDB</h2>
+    <button onclick="add_encrypted_items_to_db()">Add Data</button>
+    <h2>Decrypt data from indexedDB</h2>
+    <button onclick="decrypt_items_from_db()">Decrypt</button>
+
+    <p>
+      <strong>Encryption Time:</strong> <span id="encryptionTime"></span> ms
+    </p>
+    <p>
+      <strong>Decryption Time:</strong> <span id="decryptionTime"></span> ms
+    </p>
+
+    <p>
+      <strong>Encrypted Data:</strong>
+      <span id="encryptedData"> </span>
+    </p>
+    <p><strong>Decrypted Data:</strong> <span id="decryptedData"></span></p>
+
+    <script>
+      const random_grocery_tasks = [
+        "Buy groceries",
+        "Clean the house",
+        "Finish homework",
+        "Walk the dog",
+        "Cook dinner",
+        "Do laundry",
+        "Wash the car",
+        "Mow the lawn",
+        "Take out the trash",
+        "Water the plants",
+        "Feed the pets",
+        "Pick up the kids",
+        "Drop off dry cleaning",
+        "Get the mail",
+        "Return library books",
+        "Pay bills",
+        "Schedule appointment",
+        "Call the plumber",
+        "Fix leaky faucet",
+        "Replace light bulbs",
+        "Organize closet",
+        "Donate old clothes",
+        "Recycle newspapers",
+        "Shred documents",
+        "Clean out the garage",
+        "Paint the fence",
+        "Plant flowers",
+        "Trim the hedges",
+        "Rake leaves",
+        "Shovel snow",
+        "Install new locks",
+        "Change air filters",
+        "Test smoke alarms",
+        "Replace batteries",
+        "Check tire pressure",
+        "Wash windows",
+        "Clean gutters",
+        "Sweep porch",
+        "Wipe down counters",
+        "Scrub floors",
+        "Dust furniture",
+        "Vacuum carpets",
+        "Wash dishes",
+        "Clean refrigerator",
+        "Organize pantry",
+        "Take vitamins",
+        "Drink water",
+        "Exercise",
+        "Meditate",
+        "Read a book",
+        "Watch a movie",
+        "Listen to music",
+        "Play a game",
+        "Write in journal",
+        "Take a nap",
+        "Go for a walk",
+        "Meet a friend",
+        "Visit family",
+        "Attend event",
+        "Volunteer",
+        "Donate to charity",
+        "Cook a new recipe",
+        "Try a new hobby",
+        "Learn a new skill",
+        "Start a project",
+        "Finish a project",
+        "Set goals",
+        "Make a plan",
+        "Track progress",
+        "Celebrate success",
+        "Reflect on day",
+        "Prepare for tomorrow",
+        "Go to bed early",
+        "Wake up early",
+        "Eat breakfast",
+        "Pack lunch",
+        "Prepare dinner",
+        "Eat healthy",
+        "Avoid junk food",
+        "Limit caffeine",
+        "Reduce sugar",
+        "Quit smoking",
+        "Cut back on alcohol",
+        "Exercise regularly",
+        "Get enough sleep",
+      ];
+
+      const status = ["progress", "completed"];
+
+      const generateRandomData = () => {
+        const get_random_task_idx = Math.floor(
+          Math.random() * random_grocery_tasks.length
+        );
+        const get_random_status_idx = Math.floor(Math.random() * status.length);
+        let data = {
+          uuid: crypto.randomUUID(),
+          task: random_grocery_tasks[get_random_task_idx],
+          status: status[get_random_status_idx],
+        };
+        return data;
+      };
+
+      //setup indexedDB
+      const setup_index_db = () => {
+        const request = indexedDB.open("lab_4", 2);
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains("grocery_list")) {
+            const objectStore = db.createObjectStore("grocery_list", {
+              keyPath: "id",
+              autoIncrement: true,
+            });
+          } else {
+            console.log("Object store already exists");
+          }
+        };
+
+        request.error = (event) => {
+          console.log("Error setting up IndexedDB");
+        };
+
+        request.onsuccess = (event) => {
+          console.log("IndexedDB setup successful");
+        };
+      };
+
+      const add_encrypted_items_to_db = async () => {
+        const data_set = [];
+        const start = performance.now(); // Start measuring time
+        for (let i = 0; i < 1000; i++) {
+          const key = await generateKey().then((result) => {
+            return result;
+          });
+          const iv = crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
+          const data = generateRandomData();
+          const encryptedArray = await encryptData(key, iv, data);
+          data_set.push({
+            key: key,
+            iv: iv,
+            data: encryptedArray,
+          });
+        }
+
+        const end = performance.now(); // End measuring time
+        document.getElementById("encryptionTime").textContent = (
+          end - start
+        ).toFixed(2);
+
+        const request = indexedDB.open("lab_4", 2);
+        request.onsuccess = (event) => {
+          const db = event.target.result;
+          const transaction = db.transaction("grocery_list", "readwrite");
+          const objectStore = transaction.objectStore("grocery_list");
+          const countRequest = objectStore.count();
+
+          countRequest.onsuccess = (event) => {
+            if (event.target.result === 0) {
+              for (let i = 0; i < 1000; i++) {
+                const request = objectStore.add(data_set[i]);
+                request.onsuccess = (event) => {
+                  console.log("Data added successfully");
+                };
+                request.onerror = (event) => {
+                  console.log("Error adding data");
+                };
+              }
+            } else {
+              console.log("Data already exists");
+            }
+          };
+        };
+      };
+
+      const decrypt_items_from_db = () => {
+        const request = indexedDB.open("lab_4", 2);
+        request.onsuccess = (event) => {
+          const db = event.target.result;
+          const transaction = db.transaction("grocery_list", "readonly");
+          const objectStore = transaction.objectStore("grocery_list");
+          const cursorRequest = objectStore.openCursor();
+          const start = performance.now();
+          cursorRequest.onsuccess = (event) => {
+            const cursor = event.target.result;
+            // Start measuring time
+            
+            if (cursor) {
+              //console.log(new Uint8Array(cursor.value));
+
+              decryptData(cursor.value.key, cursor.value.iv, cursor.value.data);
+              cursor.continue();
+            } else {
+              console.log("No more data");
+              const end = performance.now(); // End measuring time
+              document.getElementById("decryptionTime").textContent = (
+                end - start
+              ).toFixed(2);
+            }
+          };
+        };
+      };
+
+      // Generate a cryptographic key
+      async function generateKey() {
+        const key = await crypto.subtle.generateKey(
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt", "decrypt"]
+        );
+        return key;
+        //iv = crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
+      }
+
+      //   // Encrypt the data (JSON array)
+      //   async function encryptData() {
+      //     if (!key) await generateKey();
+
+      //     const encoder = new TextEncoder();
+      //     const encodedData = encoder.encode(JSON.stringify(json_data));
+
+      //     const start = performance.now(); // Start measuring time
+
+      //     encryptedArray = await crypto.subtle.encrypt(
+      //       { name: "AES-GCM", iv: iv },
+      //       key,
+      //       encodedData
+      //     );
+
+      //     const end = performance.now(); // End measuring time
+      //     document.getElementById("encryptionTime").textContent = (
+      //       end - start
+      //     ).toFixed(2);
+
+      //     document.getElementById("encryptedData").textContent = new Uint8Array(
+      //       encryptedArray
+      //     ).toString();
+      //     console.log(encryptedArray);
+
+      //   }
+
+      // Encrypt the data (JSON array)
+      async function encryptData(key, iv, data) {
+        const encoder = new TextEncoder();
+        const encodedData = encoder.encode(JSON.stringify(data));
+
+        const encryptedArray = await crypto.subtle.encrypt(
+          { name: "AES-GCM", iv: iv },
+          key,
+          encodedData
+        );
+        var node = document.createElement("LI");
+        var textnode = document.createTextNode(
+          new Uint8Array(encryptedArray).toString()
+        );
+        node.appendChild(textnode);
+        document.getElementById("encryptedData").appendChild(node);
+        return encryptedArray;
+      }
+
+      //   // Decrypt the data
+      //   async function decryptData(data) {
+      //     if (!data) return;
+
+      //     const start = performance.now(); // Start measuring time
+
+      //     const decryptedArrayBuffer = await crypto.subtle.decrypt(
+      //       { name: "AES-GCM", iv: iv },
+      //       key,
+      //       data
+      //     );
+
+      //     const end = performance.now(); // End measuring time
+      //     document.getElementById("decryptionTime").textContent = (
+      //       end - start
+      //     ).toFixed(2);
+
+      //     const decoder = new TextDecoder();
+      //     const decryptedData = decoder.decode(decryptedArrayBuffer);
+      //     document.getElementById("decryptedData").textContent = decryptedData;
+      //   }
+
+      // Decrypt the data
+      async function decryptData(key, iv, data) {
+        if (!data) return;
+
+        const decryptedArrayBuffer = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: new Uint8Array(iv) },
+          key,
+          data
+        );
+
+        const decoder = new TextDecoder();
+        const decryptedData = decoder.decode(decryptedArrayBuffer);
+        var node = document.createElement("LI");
+        var textnode = document.createTextNode(
+            decryptedData
+        );
+        node.appendChild(textnode);
+        document.getElementById("decryptedData").appendChild(node);
+      }
+    </script>
+  </body>
+</html>
