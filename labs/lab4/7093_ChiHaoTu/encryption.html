@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Encryption/Decryption Performance with IndexedDB</title>
+  </head>
+  <body>
+    <h2>Encrypt/Decrypt To-Do Items in IndexedDB</h2>
+
+    <button onclick="encryptAndStoreData()">
+      Encrypt & Store in IndexedDB
+    </button>
+    <button onclick="decryptAndReadData()">
+      Decrypt & Read from IndexedDB
+    </button>
+
+    <p>
+      <strong>Encryption Time:</strong> <span id="encryptionTime"></span> ms
+    </p>
+    <p>
+      <strong>Decryption Time:</strong> <span id="decryptionTime"></span> ms
+    </p>
+
+    <p><strong>Encrypted Data:</strong> <span id="encryptedData"></span></p>
+    <p><strong>Decrypted Data:</strong> <span id="decryptedData"></span></p>
+
+    <script>
+      let encryptedArray = null;
+      let key = null;
+      let iv = null;
+
+      // Generate 1,000 sample to-do items with UUID and status
+      const todoItems = Array.from({ length: 1000 }, () => ({
+        uuid: crypto.randomUUID(),
+        task: `Task ${Math.floor(Math.random() * 1000)}`,
+        status: Math.random() > 0.5 ? "progress" : "completed",
+      }));
+
+      // Generate a cryptographic key for AES encryption
+      async function generateKey() {
+        key = await crypto.subtle.generateKey(
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt", "decrypt"]
+        );
+        iv = crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
+      }
+
+      // Function to encrypt and store the to-do items in IndexedDB
+      async function encryptAndStoreData() {
+        if (!key) await generateKey();
+
+        const encoder = new TextEncoder();
+        const encodedData = encoder.encode(JSON.stringify(todoItems));
+
+        const start = performance.now(); // Start measuring encryption time
+
+        encryptedArray = await crypto.subtle.encrypt(
+          { name: "AES-GCM", iv: iv },
+          key,
+          encodedData
+        );
+
+        const end = performance.now(); // End measuring encryption time
+        document.getElementById("encryptionTime").textContent = (
+          end - start
+        ).toFixed(2);
+
+        // Store the encrypted data in IndexedDB
+        let request = indexedDB.open("todoDB", 1);
+        request.onupgradeneeded = function (event) {
+          let db = event.target.result;
+          if (!db.objectStoreNames.contains("todos")) {
+            db.createObjectStore("todos", {
+              keyPath: "id",
+              autoIncrement: true,
+            });
+          }
+        };
+
+        request.onsuccess = function (event) {
+          let db = event.target.result;
+          let transaction = db.transaction("todos", "readwrite");
+          let store = transaction.objectStore("todos");
+
+          store.put({
+            encryptedData: encryptedArray,
+            iv: Array.from(iv), // Convert IV to array to store it
+          });
+
+          transaction.oncomplete = function () {
+            document.getElementById("encryptedData").textContent =
+              new Uint8Array(encryptedArray).toString();
+          };
+        };
+      }
+
+      // Function to decrypt and read the data from IndexedDB
+      async function decryptAndReadData() {
+        let request = indexedDB.open("todoDB", 1);
+
+        request.onsuccess = function (event) {
+          let db = event.target.result;
+          let transaction = db.transaction("todos", "readonly");
+          let store = transaction.objectStore("todos");
+
+          let getRequest = store.get(1); // Fetching the first entry for demonstration
+
+          getRequest.onsuccess = async function (event) {
+            let storedData = event.target.result;
+
+            if (!storedData) {
+              alert("No data found in IndexedDB!");
+              return;
+            }
+
+            const start = performance.now(); // Start measuring decryption time
+
+            // Retrieve IV and encrypted data from IndexedDB
+            const ivArray = new Uint8Array(storedData.iv);
+            const decryptedArrayBuffer = await crypto.subtle.decrypt(
+              { name: "AES-GCM", iv: ivArray },
+              key,
+              storedData.encryptedData
+            );
+
+            const end = performance.now(); // End measuring decryption time
+            document.getElementById("decryptionTime").textContent = (
+              end - start
+            ).toFixed(2);
+
+            const decoder = new TextDecoder();
+            const decryptedData = decoder.decode(decryptedArrayBuffer);
+            document.getElementById("decryptedData").textContent =
+              decryptedData;
+          };
+        };
+      }
+    </script>
+  </body>
+</html>
