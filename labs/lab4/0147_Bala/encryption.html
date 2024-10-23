@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance of Encryption/Decryption</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            padding: 20px;
+            background: #eef2f5;
+        }
+        h2 {
+            color: #444;
+        }
+        button {
+            padding: 12px 20px;
+            margin: 0 10px 20px 0;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        p {
+            margin-top: 16px;
+        }
+        pre {
+            background: #f2f2f2;
+            padding: 12px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h2>Performance Test: Encrypting & Decrypting To-Do Items</h2>
+
+    <button onclick="storeEncryptedData()">Encrypt and Store</button>
+    <button onclick="fetchAndDecryptData()">Decrypt and Retrieve</button>
+
+    <p><strong>Encryption Duration:</strong> <span id="encryptionTime"></span> ms</p>
+    <p><strong>Decryption Duration:</strong> <span id="decryptionTime"></span> ms</p>
+
+    <p><strong>Encrypted Data in IndexedDB:</strong></p>
+    <pre id="encryptedOutput"></pre>
+
+    <p><strong>Decrypted Data Output:</strong></p>
+    <pre id="decryptedOutput"></pre>
+
+    <script>
+        // Configurations
+        const databaseName = 'TodoDB';
+        const store = 'encryptedTasks';
+        const numberOfTasks = 1000;
+        let encryptionKey = null;
+
+        // Generate mock data for testing
+        const tasks = Array.from({ length: numberOfTasks }, (_, index) => ({
+            uuid: crypto.randomUUID(),
+            description: `Task number ${index + 1}`,
+            status: Math.random() > 0.5 ? 'Completed' : 'Pending'
+        }));
+
+        // Create or retrieve an AES-GCM key
+        async function initKey() {
+            encryptionKey = await crypto.subtle.generateKey(
+                { name: 'AES-GCM', length: 256 },
+                true,
+                ['encrypt', 'decrypt']
+            );
+            const exportedKey = await crypto.subtle.exportKey('raw', encryptionKey);
+            const keyBase64 = arrayBufferToBase64(exportedKey);
+            localStorage.setItem('keyBase64', keyBase64);
+        }
+
+        async function loadEncryptionKey() {
+            const storedKey = localStorage.getItem('keyBase64');
+            if (storedKey) {
+                const keyBuffer = base64ToArrayBuffer(storedKey);
+                encryptionKey = await crypto.subtle.importKey(
+                    'raw',
+                    keyBuffer,
+                    { name: 'AES-GCM' },
+                    true,
+                    ['encrypt', 'decrypt']
+                );
+            } else {
+                console.error('Key not found. Please encrypt data first.');
+                alert('Encryption key is missing. Run "Encrypt and Store" first.');
+                return false;
+            }
+            return true;
+        }
+
+        // Helper: Convert ArrayBuffer to Base64
+        function arrayBufferToBase64(buffer) {
+            return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+        }
+
+        // Helper: Convert Base64 to ArrayBuffer
+        function base64ToArrayBuffer(base64) {
+            const binaryString = atob(base64);
+            const buffer = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                buffer[i] = binaryString.charCodeAt(i);
+            }
+            return buffer.buffer;
+        }
+
+        // Function to encrypt and store the data in IndexedDB
+        async function storeEncryptedData() {
+            await initKey();
+            const encoder = new TextEncoder();
+            const startTime = performance.now();
+
+            const encryptedDataList = [];
+            for (const task of tasks) {
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const encodedTask = encoder.encode(JSON.stringify(task));
+                const encryptedTask = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv },
+                    encryptionKey,
+                    encodedTask
+                );
+                encryptedDataList.push({
+                    id: task.uuid,
+                    encryptedData: Array.from(new Uint8Array(encryptedTask)),
+                    iv: Array.from(iv)
+                });
+            }
+
+            const duration = performance.now() - startTime;
+            document.getElementById('encryptionTime').textContent = duration.toFixed(2);
+
+            saveToIndexedDB(encryptedDataList);
+        }
+
+        function saveToIndexedDB(dataList) {
+            const request = indexedDB.open(databaseName, 1);
+
+            request.onupgradeneeded = event => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(store)) {
+                    db.createObjectStore(store, { keyPath: 'id' });
+                }
+            };
+
+            request.onsuccess = event => {
+                const db = event.target.result;
+                const transaction = db.transaction(store, 'readwrite');
+                const objectStore = transaction.objectStore(store);
+
+                dataList.forEach(data => objectStore.put(data));
+
+                document.getElementById('encryptedOutput').textContent = 'Data encrypted and saved successfully.';
+            };
+
+            request.onerror = () => {
+                console.error('Database access error.');
+            };
+        }
+
+        // Function to fetch and decrypt data from IndexedDB
+        async function fetchAndDecryptData() {
+            const keyReady = await loadEncryptionKey();
+            if (!keyReady) return;
+
+            const request = indexedDB.open(databaseName, 1);
+
+            request.onsuccess = event => {
+                const db = event.target.result;
+                const transaction = db.transaction(store, 'readonly');
+                const objectStore = transaction.objectStore(store);
+                const getAllRequest = objectStore.getAll();
+
+                getAllRequest.onsuccess = async () => {
+                    const encryptedDataList = getAllRequest.result;
+                    await decryptDataList(encryptedDataList);
+                };
+            };
+
+            request.onerror = () => {
+                console.error('Error accessing the database.');
+            };
+        }
+
+        async function decryptDataList(encryptedDataList) {
+            const startTime = performance.now();
+            const decoder = new TextDecoder();
+            const decryptedItems = [];
+
+            for (const item of encryptedDataList) {
+                const iv = new Uint8Array(item.iv);
+                const encryptedBuffer = new Uint8Array(item.encryptedData);
+
+                try {
+                    const decryptedBuffer = await crypto.subtle.decrypt(
+                        { name: 'AES-GCM', iv },
+                        encryptionKey,
+                        encryptedBuffer.buffer
+                    );
+                    const decryptedText = decoder.decode(decryptedBuffer);
+                    decryptedItems.push(JSON.parse(decryptedText));
+                } catch (error) {
+                    console.error('Decryption error for:', item.id, error);
+                }
+            }
+
+            const duration = performance.now() - startTime;
+            document.getElementById('decryptionTime').textContent = duration.toFixed(2);
+            document.getElementById('decryptedOutput').textContent = JSON.stringify(decryptedItems, null, 2);
+        }
+    </script>
+</body>
+</html>
