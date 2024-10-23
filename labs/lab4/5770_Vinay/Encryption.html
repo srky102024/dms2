@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encrypt/Decrypt To-Do Items</title>
+</head>
+<body>
+    <h1>Encrypt/Decrypt To-Do Items</h1>
+    <button onclick="generateObjects()">Generate 1000 Objects</button>
+    <button onclick="encryptAndStore()">Encrypt</button>
+    <button onclick="decryptAndDisplay()">Decrypt</button>
+    <p>Encryption Time: <span id="encryptionTime"></span> ms</p>
+    <p>Decryption Time: <span id="decryptionTime"></span> ms</p>
+    <h2>Encrypted Data:</h2>
+    <pre id="encryptedData"></pre>
+    <h2>Decrypted Data:</h2>
+    <pre id="decryptedData"></pre>
+
+    <script>
+        let db;
+        const dbName = "TodoListDB";
+        const objectStoreName = "todos";
+
+        function initDB() {
+            const request = indexedDB.open(dbName, 1);
+            request.onerror = (event) => console.error("IndexedDB error:", event.target.error);
+            request.onsuccess = (event) => {
+                db = event.target.result;
+                console.log("Database opened successfully");
+            };
+            request.onupgradeneeded = (event) => {
+                db = event.target.result;
+                const objectStore = db.createObjectStore(objectStoreName, { keyPath: "id", autoIncrement: true });
+                console.log("Object store created");
+            };
+        }
+
+        function generateObjects() {
+            const transaction = db.transaction([objectStoreName], "readwrite");
+            const objectStore = transaction.objectStore(objectStoreName);
+            
+            for (let i = 0; i < 1000; i++) {
+                const todo = {
+                    title: `Task ${i + 1}`,
+                    description: `Description for task ${i + 1}`,
+                    status: Math.random() < 0.5 ? "Pending" : "Completed",
+                    priority: ["Low", "Medium", "High"][Math.floor(Math.random() * 3)],
+                    dueDate: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                };
+                objectStore.add(todo);
+            }
+            console.log("1000 objects generated");
+        }
+
+        async function encryptData(data) {
+            const encoder = new TextEncoder();
+            const dataBuffer = encoder.encode(data);
+            const key = await crypto.subtle.generateKey(
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const encryptedData = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                key,
+                dataBuffer
+            );
+            return JSON.stringify({
+                data: Array.from(new Uint8Array(encryptedData)),
+                iv: Array.from(iv),
+                key: Array.from(new Uint8Array(await crypto.subtle.exportKey("raw", key)))
+            });
+        }
+
+        async function decryptData(encryptedData) {
+            const { data, iv, key } = JSON.parse(encryptedData);
+            const importedKey = await crypto.subtle.importKey(
+                "raw",
+                new Uint8Array(key),
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+            const decryptedData = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: new Uint8Array(iv) },
+                importedKey,
+                new Uint8Array(data)
+            );
+            return new TextDecoder().decode(decryptedData);
+        }
+
+        async function encryptAndStore() {
+            const startTime = performance.now();
+            const todosToEncrypt = [];
+            let currentId = 0;
+            const batchSize = 100; // Adjusted batch size for better performance
+
+            // Step 1: Read all todos into memory in one transaction
+            async function processBatch() {
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([objectStoreName], "readonly");
+                    const objectStore = transaction.objectStore(objectStoreName);
+                    const range = IDBKeyRange.lowerBound(currentId, true);
+                    const cursorRequest = objectStore.openCursor(range);
+                    let count = 0;
+
+                    cursorRequest.onsuccess = function(event) {
+                        const cursor = event.target.result;
+                        if (cursor && count < batchSize) {
+                            todosToEncrypt.push(cursor.value); // Collect todos in memory
+                            currentId = cursor.key;
+                            count++;
+                            cursor.continue();
+                        } else {
+                            resolve(count > 0);
+                        }
+                    };
+
+                    cursorRequest.onerror = (event) => {
+                        console.error("Cursor request error:", event.target.error);
+                        reject(event.target.error);
+                    };
+                });
+            }
+
+            while (await processBatch()) {}
+
+            // Step 2: Encrypt todos outside of the transaction
+            const encryptedTodos = [];
+            for (const todo of todosToEncrypt) {
+                const encryptedTitle = await encryptData(todo.title); // Perform encryption
+                encryptedTodos.push({
+                    id: todo.id,
+                    title: encryptedTitle,
+                    description: todo.description,
+                    status: todo.status,
+                    priority: todo.priority,
+                    dueDate: todo.dueDate
+                });
+            }
+
+            // Step 3: Write encrypted todos in a new transaction
+            const storeTransaction = db.transaction([objectStoreName], "readwrite");
+            const store = storeTransaction.objectStore(objectStoreName);
+
+            for (const encryptedTodo of encryptedTodos) {
+                store.put(encryptedTodo);
+            }
+
+            storeTransaction.oncomplete = () => {
+                const endTime = performance.now();
+                const encryptionTime = endTime - startTime;
+                document.getElementById('encryptionTime').textContent = encryptionTime.toFixed(2);
+                document.getElementById('encryptedData').textContent = JSON.stringify(encryptedTodos, null, 2);
+                console.log("All data encrypted and stored.");
+            };
+
+            storeTransaction.onerror = (event) => {
+                console.error("Store transaction error:", event.target.error);
+            };
+        }
+
+        async function decryptAndDisplay() {
+            const startTime = performance.now();
+            const decryptedTodos = [];
+            let currentId = 0;
+            const batchSize = 100; // Adjusted batch size for better performance
+
+            // Step 1: Read all todos into memory in one transaction
+            async function processBatch() {
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([objectStoreName], "readonly");
+                    const objectStore = transaction.objectStore(objectStoreName);
+                    const range = IDBKeyRange.lowerBound(currentId, true);
+                    const cursorRequest = objectStore.openCursor(range);
+                    let count = 0;
+
+                    cursorRequest.onsuccess = function(event) {
+                        const cursor = event.target.result;
+                        if (cursor && count < batchSize) {
+                            decryptedTodos.push(cursor.value); // Collect todos in memory
+                            currentId = cursor.key;
+                            count++;
+                            cursor.continue();
+                        } else {
+                            resolve(count > 0);
+                        }
+                    };
+
+                    cursorRequest.onerror = (event) => {
+                        console.error("Cursor request error:", event.target.error);
+                        reject(event.target.error);
+                    };
+                });
+            }
+
+            while (await processBatch()) {}
+
+            // Step 2: Decrypt todos outside of the transaction
+            const decryptedData = [];
+            for (const todo of decryptedTodos) {
+                const decryptedTitle = await decryptData(todo.title); // Perform decryption
+                decryptedData.push({
+                    id: todo.id,
+                    title: decryptedTitle,
+                    description: todo.description,
+                    status: todo.status,
+                    priority: todo.priority,
+                    dueDate: todo.dueDate
+                });
+            }
+
+            // Display decrypted data
+            const endTime = performance.now();
+            const decryptionTime = endTime - startTime;
+            document.getElementById('decryptionTime').textContent = decryptionTime.toFixed(2);
+            document.getElementById('decryptedData').textContent = JSON.stringify(decryptedData, null, 2);
+            console.log("Decryption complete.");
+        }
+
+        initDB();
+    </script>
+</body>
+</html>
