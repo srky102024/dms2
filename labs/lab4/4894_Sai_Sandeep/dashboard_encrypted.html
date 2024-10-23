@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do Task Dashboard (Encrypted)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+
+        .chart-container {
+            text-align: center;
+        }
+
+        svg {
+            background-color: white;
+            border: 1px solid #ccc;
+        }
+
+        .axis-label {
+            font-size: 12px;
+            fill: #666;
+        }
+
+        .bar-label {
+            font-size: 14px;
+            fill: #333;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chart-container">
+        <h1>To-Do Task Status Overview (Encrypted)</h1>
+        <svg id="statusChart" width="400" height="300">
+            <!-- X Axis -->
+            <line x1="50" y1="250" x2="350" y2="250" stroke="black"/>
+            <!-- Y Axis -->
+            <line x1="50" y1="50" x2="50" y2="250" stroke="black"/>
+        </svg>
+    </div>
+
+    <script src="generate_todos.js"></script>
+    <script>
+        // Load and decrypt data from IndexedDB
+        function loadChartDataFromIndexedDB() {
+            const request = indexedDB.open("Lab4Database", 1);
+
+            request.onsuccess = (event) => {
+                const db = event.target.result;
+                const transaction = db.transaction("todos", "readonly");
+                const objectStore = transaction.objectStore("todos");
+
+                const allData = objectStore.getAll();
+                const startTime = performance.now(); // Start timing
+
+                allData.onsuccess = async () => {
+                    const items = allData.result;
+
+                    // Decrypt tasks and measure the time
+                    for (let item of items) {
+                        const decryptedTask = await decryptText(item.encryptedTask, item.iv);
+                        console.log(`Decrypted Task: ${decryptedTask}`);
+                    }
+
+                    const endTime = performance.now(); // End timing
+                    console.log(`Decryption and reading completed in ${(endTime - startTime)} milliseconds.`);
+                };
+            };
+        }
+
+        window.onload = loadChartDataFromIndexedDB;
+    </script>
+</body>
+</html>
