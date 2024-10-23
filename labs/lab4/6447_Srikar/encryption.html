@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encryption/Decryption Performance</title>
+</head>
+<body>
+
+<h2>Encrypt/Decrypt To-Do Items</h2>
+
+<button onclick="encryptData()">Encrypt</button>
+<button onclick="decryptData()">Decrypt</button>
+
+<p><strong>Encryption Time:</strong> <span id="encryptionTime"></span> ms</p>
+<p><strong>Decryption Time:</strong> <span id="decryptionTime"></span> ms</p>
+
+<p><strong>Encrypted Data:</strong> <span id="encryptedData"></span></p>
+<p><strong>Decrypted Data:</strong> <span id="decryptedData"></span></p>
+
+
+<script>
+    let encryptedArray = null;
+    let key = null;
+    let iv = null;
+
+    const todoItems = [
+        { uuid: crypto.randomUUID(), task: "Buy groceries", status: "progress" },
+        { uuid: crypto.randomUUID(), task: "Go to the gym", status: "completed" },
+        { uuid: crypto.randomUUID(), task: "Finish cleaning", status: "progress" },
+        { uuid: crypto.randomUUID(), task: "Cook meals", status: "completed" },
+    ];
+
+    async function generateKey() {
+        key = await crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+        );
+        iv = crypto.getRandomValues(new Uint8Array(12));
+    }
+
+    async function encryptData() {
+        if (!key) await generateKey();
+
+        const encoder = new TextEncoder();
+        const encodedData = encoder.encode(JSON.stringify(todoItems));
+
+        const start = performance.now();
+
+        encryptedArray = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv },
+            key,
+            encodedData
+        );
+
+        const end = performance.now();
+        document.getElementById('encryptionTime').textContent = (end - start).toFixed(2);
+
+        // Convert encryptedArray (ArrayBuffer) to Base64 for display
+        const encryptedDataStr = arrayBufferToBase64(encryptedArray);
+        document.getElementById('encryptedData').textContent = encryptedDataStr;
+    }
+
+    async function decryptData() {
+        if (!encryptedArray) return;
+
+        const start = performance.now();
+
+        const decryptedArrayBuffer = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: iv },
+            key,
+            encryptedArray
+        );
+
+        const end = performance.now();
+        document.getElementById('decryptionTime').textContent = (end - start).toFixed(2);
+
+        const decoder = new TextDecoder();
+        const decryptedData = decoder.decode(decryptedArrayBuffer);
+        document.getElementById('decryptedData').textContent = decryptedData;
+    }
+
+    // Helper function: Convert ArrayBuffer to Base64 for readable display
+    function arrayBufferToBase64(buffer) {
+        const binary = String.fromCharCode.apply(null, new Uint8Array(buffer));
+        return btoa(binary);
+    }
+</script>
+
+</body>
+</html>
