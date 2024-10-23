@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dynamic Status Chart with IndexedDB</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f4f4f4;
+      }
+
+      .chart-container {
+        text-align: center;
+      }
+
+      svg {
+        background-color: white;
+        border: 1px solid #ccc;
+      }
+
+      .axis-label {
+        font-size: 12px;
+        fill: #666;
+      }
+
+      .bar-label {
+        font-size: 14px;
+        fill: #333;
+      }
+
+      h1 {
+        font-size: 24px;
+        margin-bottom: 20px;
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chart-container">
+      <h1>Task Status Overview</h1>
+      <svg id="statusChart" width="400" height="300">
+        <!-- X Axis -->
+        <line x1="50" y1="250" x2="350" y2="250" stroke="black" />
+        <!-- Y Axis -->
+        <line x1="50" y1="50" x2="50" y2="250" stroke="black" />
+      </svg>
+    </div>
+
+    <script>
+      // Open IndexedDB to store and retrieve tasks
+      let db;
+      const request = indexedDB.open("taskDB", 1);
+
+      // Create an object store for tasks
+      request.onupgradeneeded = function (e) {
+        db = e.target.result;
+        const taskStore = db.createObjectStore("tasks", {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+        taskStore.createIndex("status", "status", { unique: false });
+      };
+
+      // On success, populate with data if not already populated
+      request.onsuccess = function (e) {
+        db = e.target.result;
+
+        // Check if the tasks store has any records
+        const transaction = db.transaction(["tasks"], "readonly");
+        const taskStore = transaction.objectStore("tasks");
+        const countRequest = taskStore.count();
+
+        countRequest.onsuccess = function () {
+          if (countRequest.result === 0) {
+            // Generate 1,000 random tasks
+            generateRandomTasks();
+          } else {
+            // Display the chart if data already exists
+            loadDataAndDrawChart();
+          }
+        };
+      };
+
+      // Generate 1,000 random tasks
+      function generateRandomTasks() {
+        const transaction = db.transaction(["tasks"], "readwrite");
+        const taskStore = transaction.objectStore("tasks");
+
+        for (let i = 0; i < 1000; i++) {
+          const status = getRandomStatus();
+          const task = {
+            status: status,
+            description: `Task ${i + 1}`,
+          };
+          taskStore.add(task);
+        }
+
+        transaction.oncomplete = function () {
+          loadDataAndDrawChart();
+        };
+      }
+
+      // Get random task status
+      function getRandomStatus() {
+        const statuses = ["Completed", "In Progress", "Other"];
+        return statuses[Math.floor(Math.random() * statuses.length)];
+      }
+
+      // Load data from IndexedDB and draw the chart
+      function loadDataAndDrawChart() {
+        const transaction = db.transaction(["tasks"], "readonly");
+        const taskStore = transaction.objectStore("tasks");
+
+        const taskData = {
+          Completed: 0,
+          "In Progress": 0,
+          Other: 0,
+        };
+
+        const cursorRequest = taskStore.openCursor();
+        cursorRequest.onsuccess = function (e) {
+          const cursor = e.target.result;
+          if (cursor) {
+            const task = cursor.value;
+            taskData[task.status]++;
+            cursor.continue();
+          } else {
+            // After all data is processed, draw the chart
+            drawChart(taskData);
+          }
+        };
+      }
+
+      // Draw the chart using SVG
+      function drawChart(taskData) {
+        // Convert taskData to an array of objects
+        const chartData = Object.keys(taskData).map((status) => ({
+          status: status,
+          count: taskData[status],
+          color:
+            status === "Completed"
+              ? "green"
+              : status === "In Progress"
+              ? "orange"
+              : "gray",
+        }));
+
+        // Get the SVG element
+        const svg = document.getElementById("statusChart");
+
+        // Chart dimensions and settings
+        const chartHeight = 250;
+        const barWidth = 50;
+        const barSpacing = 80;
+        const startX = 80;
+        const maxTaskCount = Math.max(...chartData.map((task) => task.count));
+
+        // Clear any existing bars or labels
+        while (svg.firstChild) {
+          svg.removeChild(svg.firstChild);
+        }
+
+        // X and Y axes
+        svg.appendChild(createLine(50, 250, 350, 250)); // X Axis
+        svg.appendChild(createLine(50, 50, 50, 250)); // Y Axis
+
+        // Generate bars dynamically based on the task data
+        chartData.forEach((task, index) => {
+          const barHeight = (task.count / maxTaskCount) * 200;
+
+          // Create a rectangle (bar)
+          const rect = createRect(
+            startX + index * barSpacing,
+            chartHeight - barHeight,
+            barWidth,
+            barHeight,
+            task.color
+          );
+          svg.appendChild(rect);
+
+          // Add label under each bar (status)
+          const label = createText(
+            startX + index * barSpacing + 10,
+            chartHeight + 20,
+            task.status
+          );
+          svg.appendChild(label);
+
+          // Add count on top of each bar
+          const countLabel = createText(
+            startX + index * barSpacing + 15,
+            chartHeight - barHeight - 10,
+            task.count
+          );
+          svg.appendChild(countLabel);
+        });
+
+        // Y Axis Labels
+        for (let i = 0; i <= maxTaskCount; i += 100) {
+          const yLabel = createText(
+            20,
+            chartHeight - (i / maxTaskCount) * 200,
+            i
+          );
+          svg.appendChild(yLabel);
+        }
+
+        // X Axis Label (Task Status)
+        const xAxisLabel = createText(180, 290, "Task Status");
+        svg.appendChild(xAxisLabel);
+
+        // Y Axis Label (Number of Tasks)
+        const yAxisLabel = createText(10, 30, "Number of Tasks");
+        yAxisLabel.setAttribute("transform", "rotate(-90 20,100)");
+        svg.appendChild(yAxisLabel);
+      }
+
+      // Helper functions to create SVG elements
+      function createLine(x1, y1, x2, y2) {
+        const line = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "line"
+        );
+        line.setAttribute("x1", x1);
+        line.setAttribute("y1", y1);
+        line.setAttribute("x2", x2);
+        line.setAttribute("y2", y2);
+        line.setAttribute("stroke", "black");
+        return line;
+      }
+
+      function createRect(x, y, width, height, fill) {
+        const rect = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "rect"
+        );
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
+        rect.setAttribute("width", width);
+        rect.setAttribute("height", height);
+        rect.setAttribute("fill", fill);
+        return rect;
+      }
+
+      function createText(x, y, textContent) {
+        const text = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "text"
+        );
+        text.setAttribute("x", x);
+        text.setAttribute("y", y);
+        text.setAttribute("class", "axis-label");
+        text.textContent = textContent;
+        return text;
+      }
+    </script>
+  </body>
+</html>
