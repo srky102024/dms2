@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List Dashboard</title>
+
+    <!-- Load Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <!-- Add CSS for enhanced dashboard styling -->
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f2f5;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            color: #34495e;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .chart-section {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+        }
+
+        .card {
+            background-color: #3498db;
+            color: white;
+            padding: 25px;
+            width: 30%;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .card h2 {
+            font-size: 26px;
+            margin: 0 0 10px;
+        }
+
+        .card p {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .chart-container {
+            margin-top: 50px;
+            padding: 30px;
+            background-color: #f9f9f9;
+            border-radius: 12px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        h2.chart-title {
+            text-align: center;
+            font-size: 28px;
+            color: #34495e;
+            margin-bottom: 20px;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            background-color: #34495e;
+            color: white;
+            border-radius: 0 0 12px 12px;
+        }
+
+        footer p {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        /* Responsive */
+        @media screen and (max-width: 768px) {
+            .chart-section {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .card {
+                width: 80%;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Dashboard Header -->
+        <div class="header">
+            <h1>To-Do List Dashboard</h1>
+        </div>
+
+        <!-- Card Section for Overview -->
+        <div class="chart-section">
+            <div class="card" id="totalTasks">
+                <h2>Total Tasks</h2>
+                <p>Loading...</p>
+            </div>
+            <div class="card" id="completedTasks">
+                <h2>Completed Tasks</h2>
+                <p>Loading...</p>
+            </div>
+            <div class="card" id="pendingTasks">
+                <h2>Pending Tasks</h2>
+                <p>Loading...</p>
+            </div>
+        </div>
+
+        <!-- Chart Container -->
+        <div class="chart-container">
+            <h2 class="chart-title">Completed vs. Not Completed To-Do Items</h2>
+            <canvas id="myChart" width="400" height="200"></canvas>
+        </div>
+
+        <footer>
+            <p>To-Do Dashboard © 2024 | Designed with care</p>
+        </footer>
+    </div>
+
+    <script>
+        // Function to initialize IndexedDB and add 1000 to-do items
+        function initializeDatabase() {
+            let db;
+            const request = indexedDB.open("ToDoDatabase", 1);
+
+            request.onupgradeneeded = function (event) {
+                db = event.target.result;
+                const objectStore = db.createObjectStore("toDoItems", { keyPath: "id", autoIncrement: true });
+
+                objectStore.transaction.oncomplete = function () {
+                    const toDoObjectStore = db.transaction("toDoItems", "readwrite").objectStore("toDoItems");
+
+                    // Generate 1000 to-do items
+                    for (let i = 1; i <= 1000; i++) {
+                        const toDoItem = { title: `To-Do Item ${i}`, completed: Math.random() > 0.5 };
+                        toDoObjectStore.add(toDoItem);
+                    }
+                };
+            };
+
+            request.onsuccess = function (event) {
+                db = event.target.result;
+                updateChart();
+            };
+
+            request.onerror = function () {
+                console.error("Error opening the IndexedDB");
+            };
+        }
+
+        // Function to update the bar chart and cards with data from IndexedDB
+        function updateChart() {
+            const request = indexedDB.open("ToDoDatabase", 1);
+            request.onsuccess = function (event) {
+                const db = event.target.result;
+                const transaction = db.transaction(["toDoItems"], "readonly");
+                const objectStore = transaction.objectStore("toDoItems");
+
+                let completedCount = 0;
+                let notCompletedCount = 0;
+                let totalCount = 0;
+
+                objectStore.openCursor().onsuccess = function (event) {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        totalCount++;
+                        if (cursor.value.completed) {
+                            completedCount++;
+                        } else {
+                            notCompletedCount++;
+                        }
+                        cursor.continue();
+                    } else {
+                        renderChart({ completed: completedCount, notCompleted: notCompletedCount });
+                        updateCards(totalCount, completedCount, notCompletedCount);
+                    }
+                };
+            };
+        }
+
+        // Function to render the bar chart
+        function renderChart(data) {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Completed', 'Not Completed'],
+                    datasets: [{
+                        label: 'To-Do Items',
+                        data: [data.completed, data.notCompleted],
+                        backgroundColor: ['#2ecc71', '#e74c3c'],
+                        borderColor: ['#27ae60', '#c0392b'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Function to update the cards with task counts
+        function updateCards(total, completed, notCompleted) {
+            document.getElementById("totalTasks").querySelector('p').textContent = total;
+            document.getElementById("completedTasks").querySelector('p').textContent = completed;
+            document.getElementById("pendingTasks").querySelector('p').textContent = notCompleted;
+        }
+
+        // Initialize the database and update the chart
+        initializeDatabase();
+    </script>
+
+</body>
+</html>
