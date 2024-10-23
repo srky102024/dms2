@@ -133,13 +133,15 @@
       //setup indexedDB
       const setup_index_db = () => {
         const request = indexedDB.open("lab_4", 2);
-        request.onupgradeneeded = (event) => {
+        request.onupgradeneeded = async (event) => {
           const db = event.target.result;
           if (!db.objectStoreNames.contains("grocery_list")) {
             const objectStore = db.createObjectStore("grocery_list", {
               keyPath: "id",
               autoIncrement: true,
             });
+            const key = await generateKey();
+            localStorage.setItem("key", JSON.stringify(key));
           } else {
             console.log("Object store already exists");
           }
@@ -157,15 +159,17 @@
       const add_encrypted_items_to_db = async () => {
         const data_set = [];
         const start = performance.now(); // Start measuring time
+        const getKey = JSON.parse(localStorage.getItem("key"));
+        console.log(getKey);
+        
+        const importedKey = await crypto.subtle.importKey("jwk", getKey, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]);
+        console.log(importedKey);
+             
         for (let i = 0; i < 1000; i++) {
-          const key = await generateKey().then((result) => {
-            return result;
-          });
-          const iv = crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
           const data = generateRandomData();
-          const encryptedArray = await encryptData(key, iv, data);
+          const iv = crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
+          const encryptedArray = await encryptData(importedKey, iv, data);
           data_set.push({
-            key: key,
             iv: iv,
             data: encryptedArray,
           });
@@ -201,22 +205,25 @@
         };
       };
 
-      const decrypt_items_from_db = () => {
+      const decrypt_items_from_db = async () => {
         const request = indexedDB.open("lab_4", 2);
-        request.onsuccess = (event) => {
+        const getKey = JSON.parse(localStorage.getItem("key"));
+        console.log(getKey);
+        
+        const importedKey = await crypto.subtle.importKey("jwk", getKey, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]);
+        console.log(importedKey);
+        
+        request.onsuccess =  (event) => {
           const db = event.target.result;
           const transaction = db.transaction("grocery_list", "readonly");
           const objectStore = transaction.objectStore("grocery_list");
           const cursorRequest = objectStore.openCursor();
+          // Start measuring time
           const start = performance.now();
           cursorRequest.onsuccess = (event) => {
             const cursor = event.target.result;
-            // Start measuring time
-            
             if (cursor) {
-              //console.log(new Uint8Array(cursor.value));
-
-              decryptData(cursor.value.key, cursor.value.iv, cursor.value.data);
+              decryptData(importedKey, cursor.value.iv, cursor.value.data);
               cursor.continue();
             } else {
               console.log("No more data");
@@ -236,37 +243,10 @@
           true,
           ["encrypt", "decrypt"]
         );
-        return key;
-        //iv = crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
+        const exportedKey = await crypto.subtle.exportKey("jwk", key);
+
+        return exportedKey;
       }
-
-      //   // Encrypt the data (JSON array)
-      //   async function encryptData() {
-      //     if (!key) await generateKey();
-
-      //     const encoder = new TextEncoder();
-      //     const encodedData = encoder.encode(JSON.stringify(json_data));
-
-      //     const start = performance.now(); // Start measuring time
-
-      //     encryptedArray = await crypto.subtle.encrypt(
-      //       { name: "AES-GCM", iv: iv },
-      //       key,
-      //       encodedData
-      //     );
-
-      //     const end = performance.now(); // End measuring time
-      //     document.getElementById("encryptionTime").textContent = (
-      //       end - start
-      //     ).toFixed(2);
-
-      //     document.getElementById("encryptedData").textContent = new Uint8Array(
-      //       encryptedArray
-      //     ).toString();
-      //     console.log(encryptedArray);
-
-      //   }
-
       // Encrypt the data (JSON array)
       async function encryptData(key, iv, data) {
         const encoder = new TextEncoder();
@@ -285,41 +265,21 @@
         document.getElementById("encryptedData").appendChild(node);
         return encryptedArray;
       }
-
-      //   // Decrypt the data
-      //   async function decryptData(data) {
-      //     if (!data) return;
-
-      //     const start = performance.now(); // Start measuring time
-
-      //     const decryptedArrayBuffer = await crypto.subtle.decrypt(
-      //       { name: "AES-GCM", iv: iv },
-      //       key,
-      //       data
-      //     );
-
-      //     const end = performance.now(); // End measuring time
-      //     document.getElementById("decryptionTime").textContent = (
-      //       end - start
-      //     ).toFixed(2);
-
-      //     const decoder = new TextDecoder();
-      //     const decryptedData = decoder.decode(decryptedArrayBuffer);
-      //     document.getElementById("decryptedData").textContent = decryptedData;
-      //   }
-
       // Decrypt the data
       async function decryptData(key, iv, data) {
         if (!data) return;
-
+        console.log(key);
+        
+                
         const decryptedArrayBuffer = await crypto.subtle.decrypt(
           { name: "AES-GCM", iv: new Uint8Array(iv) },
           key,
-          data
+          new Uint8Array(data) 
         );
-
         const decoder = new TextDecoder();
         const decryptedData = decoder.decode(decryptedArrayBuffer);
+        console.log(decryptedData);
+        
         var node = document.createElement("LI");
         var textnode = document.createTextNode(
             decryptedData
