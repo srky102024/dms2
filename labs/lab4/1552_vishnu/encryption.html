@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Encryption/Decryption Performance</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        h2 {
+            color: #333;
+        }
+        button {
+            padding: 10px 15px;
+            margin-right: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        p {
+            margin-top: 20px;
+        }
+        pre {
+            background-color: #e8e8e8;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h2>Encrypt/Decrypt To-Do Items from IndexedDB</h2>
+
+    <button onclick="encryptAndStoreData()">Encrypt & Store</button>
+    <button onclick="decryptAndFetchData()">Decrypt & Fetch</button>
+
+    <p><strong>Encryption Time:</strong> <span id="encryptionTime"></span> ms</p>
+    <p><strong>Decryption Time:</strong> <span id="decryptionTime"></span> ms</p>
+
+    <p><strong>Encrypted Data (IndexedDB):</strong></p>
+    <pre id="encryptedData"></pre>
+
+    <p><strong>Decrypted Data:</strong></p>
+    <pre id="decryptedData"></pre>
+
+    <script>
+        // Constants
+        const dbName = 'TaskDatabase';
+        const storeName = 'tasksStore';
+        const taskLimit = 1000;
+
+        // Variables
+        let key = null;
+
+        // Generate sample data
+        const todoItems = [];
+        for (let i = 0; i < taskLimit; i++) {
+            todoItems.push({
+                uuid: crypto.randomUUID(),
+                task: `Task ${i + 1}`,
+                status: Math.random() > 0.5 ? 'Completed' : 'Pending'
+            });
+        }
+
+        // Generate a cryptographic key for AES-GCM encryption
+        async function generateAndStoreKey() {
+            key = await crypto.subtle.generateKey(
+                { name: 'AES-GCM', length: 256 },
+                true,
+                ['encrypt', 'decrypt']
+            );
+            const exportedKey = await crypto.subtle.exportKey('raw', key);
+            const keyBase64 = arrayBufferToBase64(exportedKey);
+            localStorage.setItem('encryptionKey', keyBase64);
+        }
+
+        // Load the key from localStorage
+        async function loadKey() {
+            const keyBase64 = localStorage.getItem('encryptionKey');
+            if (keyBase64) {
+                const keyData = base64ToArrayBuffer(keyBase64);
+                key = await crypto.subtle.importKey(
+                    'raw',
+                    keyData,
+                    { name: 'AES-GCM' },
+                    true,
+                    ['encrypt', 'decrypt']
+                );
+            } else {
+                console.error('No key found in localStorage. Please encrypt data first.');
+                alert('No encryption key found. Please run "Encrypt & Store" first.');
+                return false;
+            }
+            return true;
+        }
+
+        // Helper functions to convert between ArrayBuffer and Base64
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binary = window.atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        // Encrypt and store data into IndexedDB
+        async function encryptAndStoreData() {
+            await generateAndStoreKey();
+            const encoder = new TextEncoder();
+            const start = performance.now();
+
+            const encryptedTasks = [];
+            for (const task of todoItems) {
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const encodedData = encoder.encode(JSON.stringify(task));
+                const encryptedData = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    key,
+                    encodedData
+                );
+                encryptedTasks.push({
+                    id: task.uuid,
+                    encryptedTask: Array.from(new Uint8Array(encryptedData)),
+                    iv: Array.from(iv)
+                });
+            }
+
+            const end = performance.now();
+            document.getElementById('encryptionTime').textContent = (end - start).toFixed(2);
+
+            storeEncryptedDataInIndexedDB(encryptedTasks);
+        }
+
+        function storeEncryptedDataInIndexedDB(encryptedTasks) {
+            const dbRequest = indexedDB.open(dbName, 1);
+
+            dbRequest.onupgradeneeded = function(event) {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(storeName)) {
+                    db.createObjectStore(storeName, { keyPath: 'id' });
+                }
+            };
+
+            dbRequest.onsuccess = function(event) {
+                const db = event.target.result;
+                const transaction = db.transaction(storeName, 'readwrite');
+                const store = transaction.objectStore(storeName);
+
+                encryptedTasks.forEach(task => {
+                    store.put(task);
+                });
+
+                document.getElementById('encryptedData').textContent = 'Encrypted tasks stored in IndexedDB.';
+            };
+
+            dbRequest.onerror = function() {
+                console.error('Failed to open the database.');
+            };
+        }
+
+        // Decrypt and fetch data from IndexedDB
+        async function decryptAndFetchData() {
+            const keyLoaded = await loadKey();
+            if (!keyLoaded) return;
+
+            const dbRequest = indexedDB.open(dbName, 1);
+
+            dbRequest.onsuccess = function(event) {
+                const db = event.target.result;
+                const transaction = db.transaction(storeName, 'readonly');
+                const store = transaction.objectStore(storeName);
+                const request = store.getAll();
+
+                request.onsuccess = async function() {
+                    const encryptedTasks = request.result;
+                    await decryptDataArray(encryptedTasks);
+                };
+            };
+
+            dbRequest.onerror = function() {
+                console.error('Failed to open the database.');
+            };
+        }
+
+        async function decryptDataArray(encryptedTasks) {
+            const start = performance.now();
+            const decoder = new TextDecoder();
+            const decryptedTasks = [];
+
+            for (const item of encryptedTasks) {
+                const iv = new Uint8Array(item.iv);
+                const encryptedData = new Uint8Array(item.encryptedTask);
+                try {
+                    const decryptedArrayBuffer = await crypto.subtle.decrypt(
+                        { name: 'AES-GCM', iv: iv },
+                        key,
+                        encryptedData.buffer
+                    );
+                    const decryptedText = decoder.decode(decryptedArrayBuffer);
+                    decryptedTasks.push(JSON.parse(decryptedText));
+                } catch (e) {
+                    console.error('Decryption failed for item:', item.id, e);
+                }
+            }
+
+            const end = performance.now();
+            document.getElementById('decryptionTime').textContent = (end - start).toFixed(2);
+
+            document.getElementById('decryptedData').textContent = JSON.stringify(decryptedTasks, null, 2);
+        }
+    </script>
+</body>
+</html>
