@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced To-Do Dashboard</title>
+    
+    <!-- Include Chart.js for the charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap">
+
+    <style>
+        /* Base Styling */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #f4f7f6 40%, #e0f7fa);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        h1 {
+            color: #2e3d49;
+            font-size: 28px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        /* Dashboard Container */
+        .dashboard-container {
+            background-color: #fff;
+            padding: 50px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            max-width: 1000px;
+        }
+
+        /* Chart Section Styling */
+        .charts-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+        }
+        .chart-box {
+            width: 45%;
+            position: relative;
+        }
+
+        /* Task Info Box */
+        .info-box {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .info-item {
+            flex: 1;
+            background: linear-gradient(135deg, #BBDEFB, #E3F2FD);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 0 15px;
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .info-item:hover {
+            background: linear-gradient(135deg, #64B5F6, #BBDEFB);
+            transform: translateY(-5px);
+        }
+        .info-item h2 {
+            font-size: 20px;
+            color: #2e3d49;
+            margin-bottom: 10px;
+        }
+        .info-item p {
+            font-size: 26px;
+            color: #00796B;
+            font-weight: bold;
+        }
+
+        /* Colors */
+        .completed {
+            color: #4CAF50;
+        }
+        .pending {
+            color: #FF5722;
+        }
+
+        /* Additional Styling for Transitions and Hover */
+        .chart-container canvas {
+            transition: transform 0.5s ease;
+        }
+        .chart-container:hover canvas {
+            transform: scale(1.05);
+        }
+
+        /* Additional Stats (Detailed View) */
+        .detailed-stats {
+            text-align: center;
+            margin-top: 40px;
+        }
+        .detailed-stats p {
+            font-size: 18px;
+            color: #666;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Dashboard Container -->
+    <div class="dashboard-container">
+        <h1>Enhanced To-Do List Analytics Dashboard</h1>
+
+        <!-- Info Box Section -->
+        <div class="info-box">
+            <div class="info-item">
+                <h2 class="completed">Completed Tasks</h2>
+                <p id="completedCount">Loading...</p>
+            </div>
+            <div class="info-item">
+                <h2 class="pending">Pending Tasks</h2>
+                <p id="pendingCount">Loading...</p>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-container">
+            <!-- Bar Chart for Task Summary -->
+            <div class="chart-box">
+                <canvas id="barChart"></canvas>
+            </div>
+            
+            <!-- Pie Chart for Task Distribution -->
+            <div class="chart-box">
+                <canvas id="pieChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Additional Stats Section -->
+        <div class="detailed-stats">
+            <p id="totalTasks">Total Tasks: Loading...</p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize IndexedDB
+        let db;
+        let request = indexedDB.open("ToDoListDB", 1);
+
+        // On database creation or upgrade
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+
+            // Create object store for to-do items with auto-incrementing 'id'
+            let objectStore = db.createObjectStore("toDoList", { keyPath: "id", autoIncrement: true });
+
+            // Create indexes for task and status
+            objectStore.createIndex("task", "task", { unique: false });
+            objectStore.createIndex("status", "status", { unique: false });
+        };
+
+        // On successful database open
+        request.onsuccess = function(event) {
+            db = event.target.result;
+
+            // Check if data already exists; if not, generate 1000 to-do items
+            let transaction = db.transaction(["toDoList"], "readonly");
+            let objectStore = transaction.objectStore("toDoList");
+
+            let countRequest = objectStore.count();
+            countRequest.onsuccess = function() {
+                if (countRequest.result === 0) {
+                    generateToDoItems();
+                } else {
+                    updateChartData();
+                }
+            };
+        };
+
+        // On database open error
+        request.onerror = function(event) {
+            console.log("Error opening IndexedDB:", event.target.errorCode);
+        };
+
+        // Generate 1000 to-do items
+        function generateToDoItems() {
+            let transaction = db.transaction(["toDoList"], "readwrite");
+            let objectStore = transaction.objectStore("toDoList");
+
+            for (let i = 0; i < 1000; i++) {
+                let newItem = {
+                    task: `Task #${i + 1}`,
+                    status: i % 2 === 0 ? "Completed" : "Pending" // Alternate statuses
+                };
+                objectStore.add(newItem);
+            }
+
+            transaction.oncomplete = function() {
+                console.log("1000 to-do items added to IndexedDB!");
+                updateChartData();
+            };
+        }
+
+        // Retrieve data from IndexedDB and update the charts
+        function updateChartData() {
+            let completedCount = 0;
+            let pendingCount = 0;
+
+            let transaction = db.transaction(["toDoList"], "readonly");
+            let objectStore = transaction.objectStore("toDoList");
+
+            objectStore.openCursor().onsuccess = function(event) {
+                let cursor = event.target.result;
+                if (cursor) {
+                    if (cursor.value.status === "Completed") {
+                        completedCount++;
+                    } else if (cursor.value.status === "Pending") {
+                        pendingCount++;
+                    }
+                    cursor.continue();
+                } else {
+                    // After data is processed, update the charts and stats
+                    let totalTasks = completedCount + pendingCount;
+                    updateBarChart(completedCount, pendingCount);
+                    updatePieChart(completedCount, pendingCount);
+                    document.getElementById('completedCount').textContent = completedCount;
+                    document.getElementById('pendingCount').textContent = pendingCount;
+                    document.getElementById('totalTasks').textContent = `Total Tasks: ${totalTasks}`;
+                }
+            };
+        }
+
+        // Update the bar chart with the completed and pending task data
+        function updateBarChart(completed, pending) {
+            var ctx = document.getElementById('barChart').getContext('2d');
+            var barChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Completed Tasks', 'Pending Tasks'],
+                    datasets: [{
+                        label: '# of Tasks',
+                        data: [completed, pending],
+                        backgroundColor: ['#4CAF50', '#FF5722'],
+                        borderColor: ['#4CAF50', '#FF5722'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update the pie chart to show task distribution
+        function updatePieChart(completed, pending) {
+            var ctx = document.getElementById('pieChart').getContext('2d');
+            var pieChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Completed', 'Pending'],
+                    datasets: [{
+                        label: '# of Tasks',
+                        data: [completed, pending],
+                        backgroundColor: ['#4CAF50', '#FF5722'],
+                        borderColor: ['#fff', '#fff'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
