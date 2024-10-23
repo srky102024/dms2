@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Encrypted Todo List</title>
+  </head>
+  <body>
+    <h2>To-Do Items</h2>
+
+    <button onclick="storeEncryptedItems()">Store items</button>
+    <button onclick="readDecryptedItems()">Read items</button>
+
+    <p>
+      <strong>Encryption Time:</strong> <span id="encryptionTime"></span> ms
+    </p>
+    <p>
+      <strong>Decryption Time:</strong> <span id="decryptionTime"></span> ms
+    </p>
+
+    <p><strong>Encrypted Data:</strong> <span id="encryptedData"></span></p>
+    <p><strong>Display Decrypted Data:</strong></p>
+    <ul id="decryptedData"></ul>
+
+    <script>
+      let db;
+      let key = null;
+      let decryptionCompleted = false;
+
+      const tasksRandom = [
+        "Plan the marketing strategy",
+        "Complete the budget report",
+        "Arrange team training",
+        "Design new product packaging",
+        "Schedule client follow-up",
+        "Draft partnership proposal",
+]
+
+      function generateTodoItemsFromDashboard() {
+        const statuses = ["completed", "in progress", "pending"];
+        const tasks = [];
+
+        for (let i = 0; i < 1000; i++) {
+          tasks.push({
+            uuid: crypto.randomUUID(),
+            task: tasksRandom[Math.floor(Math.random() * tasksRandom.length)],
+            status: statuses[Math.floor(Math.random() * statuses.length)],
+          });
+        }
+
+        return tasks;
+      }
+
+      const request = indexedDB.open("TodoEncrypt", 1);
+      request.onupgradeneeded = function (event) {
+        db = event.target.result;
+        const objectStore = db.createObjectStore("list_todo", {
+          keyPath: "uuid",
+        });
+        console.log("IndexedDB setup complete.");
+      };
+
+      request.onsuccess = function (event) {
+        db = event.target.result;
+        console.log("IndexedDB opened successfully.");
+        loadCryptoKey();
+      };
+
+      request.onerror = function (event) {
+        console.log("Error opening IndexedDB: ", event.target.errorCode);
+      };
+
+      async function generateKey() {
+        key = await crypto.subtle.generateKey(
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt", "decrypt"]
+        );
+        saveCryptoKey();
+      }
+
+      async function saveCryptoKey() {
+        const exportedKey = await crypto.subtle.exportKey("jwk", key);
+        sessionStorage.setItem("encryptionKey", JSON.stringify(exportedKey));
+      }
+
+      async function loadCryptoKey() {
+        const savedKey = sessionStorage.getItem("encryptionKey");
+        if (savedKey) {
+          const importedKey = await crypto.subtle.importKey(
+            "jwk",
+            JSON.parse(savedKey),
+            { name: "AES-GCM" },
+            true,
+            ["encrypt", "decrypt"]
+          );
+          key = importedKey;
+        } else {
+          console.log("No encryption key found, generating a new one.");
+          await generateKey();
+        }
+      }
+
+      async function encryptData(data) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encoder = new TextEncoder();
+        const encodedData = encoder.encode(data);
+        const encrypted = await crypto.subtle.encrypt(
+          { name: "AES-GCM", iv: iv },
+          key,
+          encodedData
+        );
+        return { encrypted, iv };
+      }
+
+      async function checkDataExists() {
+        return new Promise((resolve) => {
+          const transaction = db.transaction("list_todo", "readonly");
+          const objectStore = transaction.objectStore("list_todo");
+          const request = objectStore.count();
+
+          request.onsuccess = function (event) {
+            resolve(event.target.result > 0);
+          };
+        });
+      }
+
+      async function storeEncryptedItems() {
+        if (!key) await generateKey();
+        const dataExists = await checkDataExists();
+        if (dataExists) {
+          document.getElementById("encryptedData").textContent =
+            "Data already stored in IndexedDB.";
+          return;
+        }
+
+        const todoItems = generateTodoItemsFromDashboard();
+        const start = performance.now();
+
+        const encryptedTasks = await Promise.all(
+          todoItems.map(async (item) => {
+            const { encrypted, iv } = await encryptData(item.task);
+            return { ...item, task: encrypted, iv: Array.from(iv) };
+          })
+        );
+
+        const transaction = db.transaction("list_todo", "readwrite");
+        const objectStore = transaction.objectStore("list_todo");
+
+        for (const item of encryptedTasks) {
+          objectStore.put(item);
+        }
+
+        transaction.oncomplete = function () {
+          const end = performance.now();
+          document.getElementById("encryptionTime").textContent = (
+            end - start
+          ).toFixed(2);
+          document.getElementById("encryptedData").textContent =
+            "Tasks encrypted and stored in IndexedDB";
+        };
+
+        transaction.onerror = function (event) {
+          console.error("Error storing encrypted data:", event.target.error);
+        };
+      }
+
+      async function readDecryptedItems() {
+        if (!key) await loadCryptoKey();
+
+        if (decryptionCompleted) {
+          document.getElementById("decryptedData").textContent =
+            "No more data to decrypt.";
+          console.log("No more data to decrypt.");
+          return;
+        }
+
+        const transaction = db.transaction("list_todo", "readonly");
+        const objectStore = transaction.objectStore("list_todo");
+        const request = objectStore.getAll();
+        const start = performance.now();
+
+        request.onsuccess = async function (event) {
+          const items = event.target.result;
+          if (items.length === 0) {
+            document.getElementById("decryptedData").textContent =
+              "No more data left which can be decrypted";
+            console.log("No more data left which can be decrypted");
+            decryptionCompleted = true;
+            return;
+          }
+
+          const decryptedItems = [];
+
+          for (const item of items) {
+            try {
+              const iv = new Uint8Array(item.iv);
+              const decryptedTask = await decryptData(item.task, iv);
+              decryptedItems.push({ ...item, task: decryptedTask });
+            } catch (error) {
+              console.error("Decryption error:", error);
+              document.getElementById("decryptedData").textContent =
+                "Decryption error: " + error.message;
+              return;
+            }
+          }
+
+          const end = performance.now();
+          document.getElementById("decryptionTime").textContent = (
+            end - start
+          ).toFixed(2);
+
+          const decryptedList = document.getElementById("decryptedData");
+          decryptedItems.forEach((item) => {
+            const listItem = document.createElement("li");
+            listItem.textContent = JSON.stringify(item, null, 2);
+            decryptedList.appendChild(listItem);
+          });
+        };
+      }
+
+      async function decryptData(encryptedData, iv) {
+        const decryptedArrayBuffer = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: iv },
+          key,
+          encryptedData
+        );
+        const decoder = new TextDecoder();
+        const decryptedData = decoder.decode(decryptedArrayBuffer);
+        return decryptedData;
+      }
+    </script>
+  </body>
+</html>
