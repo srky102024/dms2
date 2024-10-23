@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Status Chart Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+
+        .chart-container {
+            text-align: center;
+        }
+
+        svg {
+            background-color: white;
+            border: 1px solid #ccc;
+        }
+
+        .axis-label {
+            font-size: 12px;
+            fill: #666;
+        }
+
+        .bar-label {
+            font-size: 14px;
+            fill: #333;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chart-container">
+        <h1>Task Status Overview</h1>
+        <svg id="statusChart" width="400" height="300">
+            <!-- X Axis -->
+            <line x1="50" y1="250" x2="350" y2="250" stroke="black"/>
+            <!-- Y Axis -->
+            <line x1="50" y1="50" x2="50" y2="250" stroke="black"/>
+        </svg>
+    </div>
+
+    <script>
+        function getRandomDueDate() {
+            const today = new Date();
+            const oneYearFromNow = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+            return new Date(today.getTime() + Math.random() * (oneYearFromNow.getTime() - today.getTime()));
+        }
+
+        function setupIndexedDB(dbName, storeName, callback) {
+            const request = indexedDB.open(dbName, 2);
+            request.onupgradeneeded = (event) => {
+                db = event.target.result;
+
+                if (!db.objectStoreNames.contains(storeName)) {
+                    const objectStore = db.createObjectStore(storeName, { keyPath: "id", autoIncrement: false });
+                    objectStore.createIndex("task", "task", { unique: false });
+                    objectStore.createIndex("status", "status", { unique: false });
+                    objectStore.createIndex("dueDate", "dueDate", { unique: false });
+                }
+            };
+
+            request.onsuccess = function (event) {
+                db = event.target.result;
+                callback(db);
+            };
+
+            request.onerror = function (event) {
+                console.error("Error opening IndexedDB:", event);
+            };
+        }
+
+        function add1000Objects(db, storeName, callback) {
+            let transaction = db.transaction(storeName, "readonly");
+            let objectStore = transaction.objectStore(storeName);
+            let countRequest = objectStore.count();
+
+            countRequest.onsuccess = function () {
+                // Only add objects if the store is empty
+                if (countRequest.result === 0) {
+                    let writeTransaction = db.transaction(storeName, "readwrite");
+                    let writeObjectStore = writeTransaction.objectStore(storeName);
+                    const statuses = ['In Progress', 'Completed', 'Other'];
+                    for (let i = 0; i < 1000; i++) {
+                        let randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+                        let object = { id: i, name: `task${i + 1}`, status: randomStatus, dueDate: getRandomDueDate() };
+                        writeObjectStore.add(object);
+                    }
+
+                    writeTransaction.oncomplete = function () {
+                        console.log("1000 objects added.");
+                        callback(db);
+                    };
+
+                    writeTransaction.onerror = function (event) {
+                        console.error("Error adding objects:", event);
+                    };
+                } else {
+                    console.log("Objects already exist, skipping insertion.");
+                    callback(db);
+                }
+            };
+        }
+
+        function countCompleted(db, storeName, callback) {
+            let transaction = db.transaction(storeName, "readonly");
+            let objectStore = transaction.objectStore(storeName);
+            let index = objectStore.index("status");
+            let count = 0;
+
+            let request = index.openCursor(IDBKeyRange.only('Completed'));
+            request.onsuccess = function (event) {
+                let cursor = event.target.result;
+                if (cursor) {
+                    count++;
+                    cursor.continue();
+                } else {
+                    callback(count);
+                }
+            };
+        }
+
+        function countProgress(db, storeName, callback) {
+            let transaction = db.transaction(storeName, "readonly");
+            let objectStore = transaction.objectStore(storeName);
+            let index = objectStore.index("status");
+            let count = 0;
+
+            let request = index.openCursor(IDBKeyRange.only('In Progress'));
+            request.onsuccess = function (event) {
+                let cursor = event.target.result;
+                if (cursor) {
+                    count++;
+                    cursor.continue();
+                } else {
+                    callback(count);
+                }
+            };
+        }
+
+        async function getTaskData() {
+            const dbName = "ToDoListDB";
+            const storeName = "ToDoList";
+            const taskData = [];
+            setupIndexedDB(dbName, storeName, async function (db) {
+                add1000Objects(db, storeName, async function () {
+                    const completedCount = await new Promise(resolve => countCompleted(db, storeName, resolve));
+                    taskData.push({
+                        status: "Completed",
+                        count: completedCount,
+                        color: "green"
+                    });
+                    const inProgressCount = await new Promise(resolve => countProgress(db, storeName, resolve));
+                    taskData.push({
+                        status: "In Progress",
+                        count: inProgressCount,
+                        color: "orange"
+                    });
+                    const otherCount = 1000 - (completedCount + inProgressCount);
+                    taskData.push({
+                        status: "Other",
+                        count: otherCount,
+                        color: "gray"
+                    });
+                    renderChart(taskData);
+                });
+            });
+        }
+
+        function renderChart(taskData) {
+            const svg = document.getElementById('statusChart');
+            const chartHeight = 250;
+            const barWidth = 50;
+            const barSpacing = 80;
+            const startX = 80;
+            const maxTaskCount = Math.max(...taskData.map(task => task.count));
+
+            taskData.forEach((task, index) => {
+                const barHeight = (task.count / maxTaskCount) * 200;
+
+                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                rect.setAttribute("x", startX + index * barSpacing);
+                rect.setAttribute("y", chartHeight - barHeight);
+                rect.setAttribute("width", barWidth);
+                rect.setAttribute("height", barHeight);
+                rect.setAttribute("fill", task.color);
+                svg.appendChild(rect);
+
+                const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                label.setAttribute("x", startX + index * barSpacing + 10);
+                label.setAttribute("y", chartHeight + 20);
+                label.setAttribute("class", "bar-label");
+                label.textContent = task.status;
+                svg.appendChild(label);
+
+                const countLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                countLabel.setAttribute("x", startX + index * barSpacing + 15);
+                countLabel.setAttribute("y", chartHeight - barHeight - 10);
+                countLabel.setAttribute("class", "bar-label");
+                countLabel.textContent = task.count;
+                svg.appendChild(countLabel);
+            });
+
+            for (let i = 0; i <= maxTaskCount; i += Math.ceil(maxTaskCount / 4)) {
+                const yLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                yLabel.setAttribute("x", 20);
+                yLabel.setAttribute("y", chartHeight - (i / maxTaskCount) * 200);
+                yLabel.setAttribute("class", "axis-label");
+                yLabel.textContent = i;
+                svg.appendChild(yLabel);
+            }
+
+            const xAxisLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            xAxisLabel.setAttribute("x", 180);
+            xAxisLabel.setAttribute("y", 290);
+            xAxisLabel.setAttribute("class", "axis-label");
+            xAxisLabel.textContent = "Task Status";
+            svg.appendChild(xAxisLabel);
+
+            const yAxisLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            yAxisLabel.setAttribute("x", 10);
+            yAxisLabel.setAttribute("y", 30);
+            yAxisLabel.setAttribute("class", "axis-label");
+            yAxisLabel.setAttribute("transform", "rotate(-90 20,100)");
+            yAxisLabel.textContent = "Number of Tasks";
+            svg.appendChild(yAxisLabel);
+        }
+
+        getTaskData();
+    </script>
+
+</body>
+</html>
+
