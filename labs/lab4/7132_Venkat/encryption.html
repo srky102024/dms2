@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encryption/Decryption Performance for To-Do List</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        .container {
+            width: 80%;
+            max-width: 900px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        p {
+            margin: 10px 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            border: none;
+            background-color: #4caf50;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #388e3c;
+        }
+
+        .output {
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Encrypt/Decrypt To-Do Items Performance</h2>
+
+    <button onclick="initializeIndexedDB()">Initialize & Encrypt</button>
+    <button onclick="decryptAndDisplayData()">Decrypt</button>
+
+    <p><strong>Encryption Time:</strong> <span id="encryptionTime"></span> ms</p>
+    <p><strong>Decryption Time:</strong> <span id="decryptionTime"></span> ms</p>
+
+    <p><strong>Encrypted Data (First 5 Items):</strong></p>
+    <p class="output" id="encryptedData"></p>
+
+    <p><strong>Decrypted Data (First 5 Items):</strong></p>
+    <p class="output" id="decryptedData"></p>
+</div>
+
+<script>
+    let encryptionKey = null;
+    let initializationVector = null;
+
+    // Generate a cryptographic key
+    async function generateKey() {
+        encryptionKey = await crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+        );
+        initializationVector = crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
+    }
+
+    // Function to initialize IndexedDB and encrypt data
+    async function initializeIndexedDB() {
+        await generateKey();
+
+        const request = indexedDB.open("ToDoListDB_Encrypted", 1);
+
+        request.onupgradeneeded = function(event) {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains("tasks")) {
+                db.createObjectStore("tasks", { keyPath: "uuid" });
+                console.log("IndexedDB setup with 'tasks' object store.");
+            }
+        };
+
+        request.onsuccess = async function(event) {
+            const db = event.target.result;
+            await encryptAndStoreTasks(db);
+        };
+
+        request.onerror = function(event) {
+            console.error("Error opening IndexedDB:", event.target.error);
+        };
+    }
+
+    // Encrypt and add 1,000 to-do items to IndexedDB in a batch manner
+    async function encryptAndStoreTasks(db) {
+        const tasksToStore = Array.from({ length: 1000 }, (_, i) => ({
+            uuid: `todo-${i}`,
+            task: `Task ${i + 1}`,
+            status: i % 2 === 0 ? "Completed" : "Pending"
+        }));
+
+        const encoder = new TextEncoder();
+        const startTime = performance.now();
+
+        const encryptedTasks = await Promise.all(tasksToStore.map(async (task) => {
+            const encodedTask = encoder.encode(task.task);
+            const encryptedTask = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: initializationVector },
+                encryptionKey,
+                encodedTask
+            );
+
+            return { uuid: task.uuid, task: new Uint8Array(encryptedTask) };
+        }));
+
+        // Clear the existing tasks first to prevent ConstraintError
+        const clearTransaction = db.transaction("tasks", "readwrite");
+        const clearTaskStore = clearTransaction.objectStore("tasks");
+        
+        clearTaskStore.clear(); // Clear the store before adding new tasks
+
+        clearTransaction.oncomplete = () => {
+            const storeTransaction = db.transaction("tasks", "readwrite");
+            const taskStore = storeTransaction.objectStore("tasks");
+
+            encryptedTasks.forEach(task => {
+                const request = taskStore.add(task);
+                request.onsuccess = () => {
+                    console.log(`Task ${task.uuid} added successfully.`);
+                };
+                request.onerror = (event) => {
+                    console.error("Failed to add task to IndexedDB:", event.target.error);
+                };
+            });
+
+            storeTransaction.oncomplete = () => {
+                const endTime = performance.now();
+                document.getElementById('encryptionTime').textContent = (endTime - startTime).toFixed(2);
+                document.getElementById('encryptedData').textContent = JSON.stringify(encryptedTasks.slice(0, 5));
+                console.log("All encrypted data added successfully.");
+            };
+
+            storeTransaction.onerror = (event) => {
+                console.error("Failed to add tasks to IndexedDB:", event.target.error);
+            };
+        };
+
+        clearTransaction.onerror = (event) => {
+            console.error("Failed to clear tasks from IndexedDB:", event.target.error);
+        };
+    }
+
+    // Decrypt and read data from IndexedDB
+    async function decryptAndDisplayData() {
+        const request = indexedDB.open("ToDoListDB_Encrypted", 1);
+
+        request.onsuccess = async function(event) {
+            const db = event.target.result;
+            const transaction = db.transaction("tasks", "readonly");
+            const objectStore = transaction.objectStore("tasks");
+            const tasks = [];
+
+            const cursorRequest = objectStore.openCursor();
+
+            cursorRequest.onsuccess = async function(event) {
+                const cursor = event.target.result;
+                if (cursor) {
+                    tasks.push(cursor.value);
+                    cursor.continue();
+                } else {
+                    const startDecrypt = performance.now();  // Start measuring decryption time
+                    const decryptedTasks = await decryptData(tasks.slice(0, 5)); // Sample first 5 items
+                    const endDecrypt = performance.now();  // End measuring decryption time
+
+                    document.getElementById('decryptionTime').textContent = (endDecrypt - startDecrypt).toFixed(2);
+                    document.getElementById('decryptedData').textContent = JSON.stringify(decryptedTasks);
+                }
+            };
+        };
+
+        request.onerror = function(event) {
+            console.error("Error opening IndexedDB:", event.target.error);
+        };
+    }
+
+    // Decrypt an array of encrypted to-do items
+    async function decryptData(encryptedTasks) {
+        const decoder = new TextDecoder();
+        const decryptedTasks = [];
+
+        for (const task of encryptedTasks) {
+            try {
+                const decryptedBuffer = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: initializationVector },
+                    encryptionKey,
+                    task.task.buffer
+                );
+                task.task = decoder.decode(decryptedBuffer);
+                decryptedTasks.push(task);
+            } catch (error) {
+                console.error("Error decrypting task:", error);
+            }
+        }
+
+        return decryptedTasks;
+    }
+</script>
+
+</body>
+</html>
