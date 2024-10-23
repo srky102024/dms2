@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Status Distribution</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #eef2f3;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        svg {
+            background-color: #fff;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .axis-text {
+            font-size: 11px;
+            fill: #555;
+        }
+
+        .bar-text {
+            font-size: 15px;
+            fill: #222;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Task Status Breakdown</h1>
+        <svg id="taskChart" width="500" height="350"></svg>
+    </div>
+
+    <script>
+        const taskStatuses = ['Completed', 'In Progress', 'Pending'];
+
+        const generateRandomDate = () => {
+            const now = new Date();
+            const futureDate = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+            return new Date(now.getTime() + Math.random() * (futureDate - now));
+        };
+
+        const initDatabase = (dbName, storeName, callback) => {
+            const dbRequest = indexedDB.open(dbName, 1);
+
+            dbRequest.onupgradeneeded = event => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(storeName)) {
+                    const store = db.createObjectStore(storeName, { keyPath: 'id' });
+                    store.createIndex('status', 'status', { unique: false });
+                }
+            };
+
+            dbRequest.onsuccess = event => callback(event.target.result);
+            dbRequest.onerror = event => console.error("Database error:", event);
+        };
+
+        const populateDatabase = (db, storeName, callback) => {
+            const transaction = db.transaction(storeName, 'readwrite');
+            const store = transaction.objectStore(storeName);
+            const tasks = Array.from({ length: 1000 }, (_, i) => ({
+                id: i + 1,
+                name: `Task ${i + 1}`,
+                status: taskStatuses[Math.floor(Math.random() * taskStatuses.length)],
+                dueDate: generateRandomDate()
+            }));
+
+            tasks.forEach(task => store.add(task));
+
+            transaction.oncomplete = () => callback(db);
+            transaction.onerror = event => console.error("Transaction error:", event);
+        };
+
+        const countTasksByStatus = (db, status, callback) => {
+            const transaction = db.transaction('Tasks', 'readonly');
+            const store = transaction.objectStore('Tasks');
+            const index = store.index('status');
+            let count = 0;
+
+            index.openCursor(IDBKeyRange.only(status)).onsuccess = event => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    count++;
+                    cursor.continue();
+                } else {
+                    callback(count);
+                }
+            };
+        };
+
+        const fetchDataAndRenderChart = async () => {
+            const dbName = "TaskDB";
+            const storeName = "Tasks";
+            initDatabase(dbName, storeName, db => {
+                populateDatabase(db, storeName, async () => {
+                    const counts = await Promise.all(
+                        taskStatuses.map(status => new Promise(resolve => countTasksByStatus(db, status, resolve)))
+                    );
+
+                    const chartData = taskStatuses.map((status, index) => ({
+                        status,
+                        count: counts[index],
+                        color: index === 0 ? 'green' : index === 1 ? 'orange' : 'red'
+                    }));
+
+                    drawChart(chartData);
+                });
+            });
+        };
+
+        const drawChart = (data) => {
+            const svg = document.getElementById('taskChart');
+            const chartHeight = 300;
+            const barWidth = 60;
+            const barSpacing = 100;
+            const maxCount = Math.max(...data.map(item => item.count));
+
+            data.forEach((item, index) => {
+                const barHeight = (item.count / maxCount) * (chartHeight - 40); // Adjusting to leave space for labels
+
+                // Create bar
+                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                rect.setAttribute("x", index * barSpacing + 50);
+                rect.setAttribute("y", chartHeight - barHeight - 20); // Adjust to account for the bottom margin
+                rect.setAttribute("width", barWidth);
+                rect.setAttribute("height", barHeight);
+                rect.setAttribute("fill", item.color);
+                svg.appendChild(rect);
+
+                // Add status label
+                const statusLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                statusLabel.setAttribute("x", index * barSpacing + 50 + barWidth / 2);
+                statusLabel.setAttribute("y", chartHeight + 10); // Adjust position for status label
+                statusLabel.setAttribute("text-anchor", "middle");
+                statusLabel.setAttribute("class", "bar-text");
+                statusLabel.textContent = item.status;
+                svg.appendChild(statusLabel);
+
+                // Add count label
+                const countLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                countLabel.setAttribute("x", index * barSpacing + 50 + barWidth / 2);
+                countLabel.setAttribute("y", chartHeight - barHeight - 25); // Adjust for count label
+                countLabel.setAttribute("text-anchor", "middle");
+                countLabel.setAttribute("class", "bar-text");
+                countLabel.textContent = item.count;
+                svg.appendChild(countLabel);
+            });
+
+            // Draw axes
+            for (let i = 0; i <= maxCount; i += 100) {
+                const yAxisLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                yAxisLabel.setAttribute("x", 30);
+                yAxisLabel.setAttribute("y", chartHeight - (i / maxCount) * (chartHeight - 40)); // Adjust for labels
+                yAxisLabel.setAttribute("class", "axis-text");
+                yAxisLabel.textContent = i;
+                svg.appendChild(yAxisLabel);
+            }
+
+            const xAxisLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            xAxisLabel.setAttribute("x", 250);
+            xAxisLabel.setAttribute("y", chartHeight + 30);
+            xAxisLabel.setAttribute("class", "axis-text");
+            xAxisLabel.textContent = "Task Status";
+            svg.appendChild(xAxisLabel);
+
+            const yAxisLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            yAxisLabel.setAttribute("x", 10);
+            yAxisLabel.setAttribute("y", 20);
+            yAxisLabel.setAttribute("class", "axis-text");
+            yAxisLabel.setAttribute("transform", "rotate(-90 10,20)");
+            yAxisLabel.textContent = "Number of Tasks";
+            svg.appendChild(yAxisLabel);
+        };
+
+        fetchDataAndRenderChart();
+    </script>
+
+</body>
+</html>
